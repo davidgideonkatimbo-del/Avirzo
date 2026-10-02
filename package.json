@@ -1,0 +1,19 @@
+{
+  "name": "avirzo",
+  "private": true,
+  "version": "2.8.2",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w client\" \"npm run dev -w server\" \"npm run worker -w server\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "verify:production": "node scripts/verify-production.mjs",
+    "validate:render": "node scripts/validate-render.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,41 @@
+AVIRZO v2.8.2 — CLEAN GITHUB UPLOAD
+
+1. Extract this ZIP.
+2. Open the extracted folder: Avirzo-v2.8.2-GitHub-Upload.
+3. Select EVERYTHING INSIDE that folder.
+4. Upload the selected files/folders to the ROOT of the GitHub Avirzo repository.
+5. Do NOT create an extra Avirzo-v2.8.2-GitHub-Upload folder inside GitHub.
+6. Make sure GitHub shows these folders at repository root:
+   .github
+   client
+   scripts
+   server
+7. Make sure these files are directly at repository root:
+   Dockerfile
+   package.json
+   render.yaml
+   supabase.sql
+   DEPLOYMENT.md
+8. Most important: open server/src and confirm index.js and worker.js are there.
+9. Do not rename files such as package.json to package (1).json or package (2).json.
+10. Do not upload .env files containing real secrets.
+11. After checking the structure, enter a commit message such as:
+   Avirzo v2.8.2 clean Render deployment
+12. Click Commit changes.
+
+EXPECTED ROOT STRUCTURE:
+
+Avirzo/
+├── .github/
+├── client/
+├── scripts/
+├── server/
+│   └── src/
+│       ├── index.js
+│       ├── worker.js
+│       └── services/
+│           └── core.js
+├── Dockerfile
+├── package.json
+├── render.yaml
+└── supabase.sql
