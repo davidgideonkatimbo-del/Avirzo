@@ -23,16 +23,41 @@ const MORE = [
 
 export function AppShell({ page, navigate, authUser, projectId, projectName, inProjectRoute, children }) {
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const [keyboardOpen, setKeyboardOpen] = React.useState(false);
   React.useEffect(() => {
     if (!moreOpen) return undefined;
     const onKey = e => { if (e.key === 'Escape') setMoreOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
+  React.useEffect(() => {
+    const isField = el => el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+    let blurTimer;
+    const onFocusIn = e => {
+      if (isField(e.target)) {
+        window.clearTimeout(blurTimer);
+        setKeyboardOpen(true);
+      }
+    };
+    const onFocusOut = () => {
+      window.clearTimeout(blurTimer);
+      blurTimer = window.setTimeout(() => {
+        const active = document.activeElement;
+        setKeyboardOpen(isField(active));
+      }, 120);
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      window.clearTimeout(blurTimer);
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
   const active = inProjectRoute ? 'projects' : (NAV.some(x => x.id === page) ? page : 'home');
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className="app-sidebar">
         <button className="sidebar-brand" type="button" onClick={() => navigate('home')} aria-label="Avirzo home">

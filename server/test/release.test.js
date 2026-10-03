@@ -38,3 +38,31 @@ test('automated test command is part of the release package', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.scripts.test, 'node --test server/test/*.test.js');
 });
+test('mobile layout removes the hidden desktop sidebar offset', () => {
+  const css = read('client/src/styles.css');
+  assert.match(css, /\.app-sidebar\{display:none!important\}/);
+  assert.match(css, /\.app-main-shell\{[^}]*margin-left:0!important/);
+  assert.match(css, /\.app-main-shell\{[^}]*width:100%/);
+  assert.match(css, /\.page-content\{[^}]*width:100%/);
+});
+
+
+test('mobile form fields prevent iOS zoom and keyboard navigation hides the bottom bar', () => {
+  const css = read('client/src/styles.css');
+  const appShell = read('client/src/components/AppShell.jsx');
+  assert.match(css, /input:not\(\[type=checkbox\]\):not\(\[type=radio\]\),select,textarea\{font-size:16px!important\}/);
+  assert.match(css, /\.app-shell\.keyboard-open \.mobile-bottom-nav\{display:none!important\}/);
+  assert.match(appShell, /keyboardOpen/);
+  assert.match(appShell, /focusin/);
+  assert.match(appShell, /focusout/);
+});
+
+test('mobile long text and plain action buttons have explicit protection', () => {
+  const css = read('client/src/styles.css');
+  const projects = read('client/src/components/ProjectsPanel.jsx');
+  const profile = read('client/src/components/ProfilePanel.jsx');
+  assert.match(css, /overflow-wrap:anywhere/);
+  assert.match(css, /\.plain-action\{/);
+  assert.match(projects, /className="plain-action"[^>]*>\+ New project/);
+  assert.match(profile, /className="plain-action"[^>]*>Sign out/);
+});

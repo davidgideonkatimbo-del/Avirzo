@@ -41,14 +41,14 @@ export function ProjectsPanel({
             <button className="generate" onClick={handleAuth} disabled={authLoading}>
               {authLoading ? 'Please wait…' : authMode === 'signup' ? 'Create account' : 'Sign in'}
             </button>
-            <button type="button" onClick={() => setAuthMode(authMode === 'signup' ? 'signin' : 'signup')}>
+            <button className="plain-action" type="button" onClick={() => setAuthMode(authMode === 'signup' ? 'signin' : 'signup')}>
               {authMode === 'signup' ? 'Already have an account? Sign in' : 'Create a new account'}
             </button>
           </div>
         ) : (
           <div className="heritage-callout">
             ☁️ Signed in as <strong>{authUser.email}</strong>. Media uploads can now go to your private Avirzo Storage bucket.{' '}
-            <button type="button" onClick={handleSignOut}>Sign out</button>
+            <button className="plain-action" type="button" onClick={handleSignOut}>Sign out</button>
           </div>
         )}
         {authStatus && <div className="heritage-callout">{authStatus}</div>}
@@ -65,7 +65,7 @@ export function ProjectsPanel({
             </p>
           </div>
           <div className="project-actions">
-            <button type="button" onClick={newProject}>+ New project</button>
+            <button className="plain-action" type="button" onClick={newProject}>+ New project</button>
             <button className="generate" type="button" onClick={saveProject} disabled={projectLoading}>
               {projectLoading ? 'Saving…' : projectId ? 'Save changes' : 'Save project'}
             </button>

@@ -701,6 +701,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .mobile-bottom-nav button{min-height:52px}
 
 @media(max-width:720px){
+  /* Mobile must never inherit the desktop sidebar reservation. The sidebar is hidden,
+     so the content shell owns the full viewport width. Keep this override at the
+     end of the stylesheet so later compact/desktop rules cannot reintroduce the offset. */
+  .app-shell{width:100%;max-width:100%;min-width:0;overflow-x:clip}
+  .app-sidebar{display:none!important}
+  .app-main-shell{width:100%;max-width:100%;min-width:0;margin-left:0!important}
+  .app-topbar{left:0;right:0;width:100%;max-width:100%;margin-left:0}
+  .page-content{width:100%;max-width:100%;min-width:0;overflow-x:clip}
   .app-topbar{padding-top:env(safe-area-inset-top);height:calc(58px + env(safe-area-inset-top))}
   .page-content{padding-left:14px;padding-right:14px;padding-bottom:calc(88px + env(safe-area-inset-bottom))}
   .topbar-project-context{max-width:35vw}
@@ -712,4 +720,53 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .studio-nav::-webkit-scrollbar{display:none}
   .studio-nav button{flex:0 0 auto;white-space:nowrap}
   .home-hero.premium-hero{margin-left:-2px;margin-right:-2px}
+}
+
+
+/* FINAL MOBILE UX HARDENING — v2.8.5
+   Prevent iOS field zoom, protect long text, standardize plain actions,
+   and hide the fixed mobile navigation while a form field is focused. */
+.app-shell{min-height:100svh}
+@supports (min-height:100dvh){.app-shell{min-height:100dvh}}
+.plain-action{
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.045);
+  color:#e8e8ec;
+  border-radius:11px;
+  padding:10px 14px;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+  transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+.plain-action:hover{background:rgba(255,255,255,.08);border-color:rgba(200,165,107,.25);transform:translateY(-1px)}
+.profile-card h2,.profile-card p,.profile-card .heritage-callout,.profile-facts strong,
+.project-card strong,.project-card span,.asset-card strong,.asset-card span,
+.account-mini span,.topbar-page-title,.topbar-project-context{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:720px){
+  input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}
+  .profile-card h2,.profile-card p,.profile-card .heritage-callout,.profile-facts strong,
+  .project-card strong,.project-card span,.asset-card strong,.asset-card span{overflow-wrap:anywhere;word-break:break-word}
+  .app-shell.keyboard-open .mobile-bottom-nav{display:none!important}
+  .app-shell.keyboard-open .app-main-shell{padding-bottom:18px}
+  .app-shell.keyboard-open .page-content{padding-bottom:24px}
+  .topbar-page-title{left:64px;right:56px;transform:none;text-align:center}
+  .project-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .project-actions button{min-width:0}
+}
+
+/* FINAL POLISH GUARDRAILS — v2.8.5
+   Last-pass resilience for narrow phones: media, tables/code, long labels,
+   and safe horizontal scrolling inside intentionally scrollable controls. */
+html,body{overscroll-behavior-x:none}
+img,svg,video,canvas{max-width:100%;height:auto}
+pre,code{overflow-wrap:anywhere;word-break:break-word}
+pre{max-width:100%;overflow-x:auto}
+table{max-width:100%;border-collapse:collapse}
+@media(max-width:720px){
+  .page-content table{display:block;overflow-x:auto}
+  .page-content input,.page-content select,.page-content textarea{max-width:100%;min-width:0}
+  .page-heading h1,.project-workspace-head h1,.workspace-card h2{overflow-wrap:anywhere;word-break:break-word}
+  .section-head,.roots-head,.voice-card-head{min-width:0}
+  .section-head>*,.roots-head>*,.voice-card-head>*{min-width:0;max-width:100%}
 }

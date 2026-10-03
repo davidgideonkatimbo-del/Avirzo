@@ -16,13 +16,13 @@ export function ProfilePanel({ authUser, authEmail, setAuthEmail, authPassword, 
           <h2>{authUser?.email || 'Guest creator'}</h2>
           <p>{authUser ? 'Your private projects and media can be connected to this account.' : 'Sign in to save projects and generated media to your private workspace.'}</p>
           {authUser ? (
-            <button type="button" className="generate" onClick={handleSignOut}>Sign out</button>
+            <button type="button" className="plain-action" onClick={handleSignOut}>Sign out</button>
           ) : supabaseEnabled ? (
             <div className="auth-form">
               <input aria-label="Email" type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" />
               <input aria-label="Password" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" />
               <button className="generate" onClick={handleAuth} disabled={authLoading}>{authLoading ? 'Please wait…' : authMode === 'signup' ? 'Create account' : 'Sign in'}</button>
-              <button type="button" onClick={() => setAuthMode(authMode === 'signup' ? 'signin' : 'signup')}>{authMode === 'signup' ? 'Already have an account? Sign in' : 'Create a new account'}</button>
+              <button className="plain-action" type="button" onClick={() => setAuthMode(authMode === 'signup' ? 'signin' : 'signup')}>{authMode === 'signup' ? 'Already have an account? Sign in' : 'Create a new account'}</button>
             </div>
           ) : (
             <div className="heritage-callout">Cloud account sign-in is not configured in this deployment yet.</div>
