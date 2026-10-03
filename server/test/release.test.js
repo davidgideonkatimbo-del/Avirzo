@@ -66,3 +66,41 @@ test('mobile long text and plain action buttons have explicit protection', () =>
   assert.match(projects, /className="plain-action"[^>]*>\+ New project/);
   assert.match(profile, /className="plain-action"[^>]*>Sign out/);
 });
+
+test('phone Home keeps the existing primary action visually dominant', () => {
+  const css = read('client/src/styles.css');
+  const main = read('client/src/main.jsx');
+  assert.match(main, /Stories with<br\/>/);
+  assert.match(main, /Enter the Studio/);
+  assert.match(main, /View films/);
+  assert.match(css, /\.home-hero\.premium-hero\{\s*min-height:0;/);
+  assert.match(css, /\.hero-cta\{width:100%;min-height:48px/);
+  assert.match(css, /\.premium-dashboard\{gap:9px/);
+});
+
+test('phone Studio keeps the existing workflow touch-friendly and visually focused', () => {
+  const css = read('client/src/styles.css');
+  const main = read('client/src/main.jsx');
+  assert.match(main, /Make your film\./);
+  assert.match(main, /Start making →/);
+  assert.match(main, /Story/);
+  assert.match(main, /Shot/);
+  assert.match(css, /\.studio-shell-card\{padding:8px!important/);
+  assert.match(css, /\.studio-shell-card textarea\{min-height:148px/);
+  assert.match(css, /\.studio-heading \.templates-trigger\{width:100%/);
+  assert.match(css, /\.studio-shell-card \.control select\{min-height:44px/);
+});
+
+test('navigation organizes existing features without adding new routes', () => {
+  const shell = read('client/src/components/AppShell.jsx');
+  assert.match(shell, /label: 'CREATE'/);
+  assert.match(shell, /label: 'LIBRARY'/);
+  assert.match(shell, /label: 'AVIRZO'/);
+  for (const id of ['studio','story','scenes','timeline','projects','assets','exports','heritage','voices','profile','settings']) {
+    assert.match(shell, new RegExp(`id: '${id}'`));
+  }
+  assert.match(shell, /const NAV = NAV_GROUPS\.flatMap/);
+  assert.match(shell, /const MORE = MORE_GROUPS\.flatMap/);
+  assert.match(shell, /const NAV_LOOKUP = \[{ id: 'home', label: 'Home'/);
+  assert.match(shell, /NAV_LOOKUP\.find\(x => x\.id === id\)/);
+});

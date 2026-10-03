@@ -1,25 +1,56 @@
 import React from 'react';
 
-const NAV = [
-  { id: 'home', label: 'Home', icon: '⌂' },
-  { id: 'studio', label: 'Studio', icon: '✦' },
-  { id: 'projects', label: 'Projects', icon: '▣' },
-  { id: 'heritage', label: 'Heritage', icon: '◈' },
-  { id: 'assets', label: 'Assets', icon: '▧' },
-  { id: 'exports', label: 'Exports', icon: '⇩' },
+const NAV_GROUPS = [
+  {
+    label: 'CREATE',
+    items: [
+      { id: 'studio', label: 'Studio', icon: '✦' },
+      { id: 'story', label: 'Story', icon: '✎' },
+      { id: 'scenes', label: 'Scenes', icon: '▤' },
+      { id: 'timeline', label: 'Timeline', icon: '▥' },
+    ],
+  },
+  {
+    label: 'LIBRARY',
+    items: [
+      { id: 'projects', label: 'Projects', icon: '▣' },
+      { id: 'assets', label: 'Assets', icon: '▧' },
+      { id: 'exports', label: 'Exports & Jobs', icon: '⇩' },
+    ],
+  },
+  {
+    label: 'AVIRZO',
+    items: [
+      { id: 'heritage', label: 'Heritage', icon: '◈' },
+      { id: 'voices', label: 'Voices', icon: '◉' },
+    ],
+  },
 ];
 
+const NAV = NAV_GROUPS.flatMap(group => group.items);
+const NAV_LOOKUP = [{ id: 'home', label: 'Home', icon: '⌂' }, ...NAV];
+
 const BOTTOM = ['home', 'studio', 'projects', 'heritage', 'more'];
-const MORE = [
-  { id: 'story', label: 'Story', icon: '✎' },
-  { id: 'scenes', label: 'Scenes', icon: '▤' },
-  { id: 'voices', label: 'Voices', icon: '◉' },
-  { id: 'timeline', label: 'Timeline', icon: '▥' },
-  { id: 'assets', label: 'Assets', icon: '▧' },
-  { id: 'exports', label: 'Exports', icon: '⇩' },
-  { id: 'profile', label: 'Profile', icon: '●' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+const MORE_GROUPS = [
+  { label: 'CREATE', items: [
+    { id: 'story', label: 'Story', icon: '✎' },
+    { id: 'scenes', label: 'Scenes', icon: '▤' },
+    { id: 'timeline', label: 'Timeline', icon: '▥' },
+  ]},
+  { label: 'LIBRARY', items: [
+    { id: 'assets', label: 'Assets', icon: '▧' },
+    { id: 'exports', label: 'Exports & Jobs', icon: '⇩' },
+  ]},
+  { label: 'AVIRZO', items: [
+    { id: 'voices', label: 'Voices', icon: '◉' },
+    { id: 'heritage', label: 'Heritage', icon: '◈' },
+  ]},
+  { label: 'ACCOUNT', items: [
+    { id: 'profile', label: 'Profile', icon: '●' },
+    { id: 'settings', label: 'Settings', icon: '⚙' },
+  ]},
 ];
+const MORE = MORE_GROUPS.flatMap(group => group.items);
 
 export function AppShell({ page, navigate, authUser, projectId, projectName, inProjectRoute, children }) {
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -54,7 +85,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
       document.removeEventListener('focusout', onFocusOut);
     };
   }, []);
-  const active = inProjectRoute ? 'projects' : (NAV.some(x => x.id === page) ? page : 'home');
+  const active = inProjectRoute ? 'projects' : (NAV_LOOKUP.some(x => x.id === page) ? page : 'home');
 
   return (
     <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
@@ -65,14 +96,19 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
           <span>AVIRZO</span>
         </button>
         <div className="sidebar-caption">AFRICAN CINEMA</div>
-        <nav className="sidebar-nav" aria-label="Main navigation">
-          {NAV.map(item => (
-            <button key={item.id} type="button" className={active === item.id ? 'active' : ''} aria-current={active === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
-              <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        {NAV_GROUPS.map(group => (
+          <div className="sidebar-nav-group" key={group.label}>
+            <div className="sidebar-group-label">{group.label}</div>
+            <nav className="sidebar-nav" aria-label={`${group.label} navigation`}>
+              {group.items.map(item => (
+                <button key={item.id} type="button" className={active === item.id ? 'active' : ''} aria-current={active === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
+                  <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+        ))}
         <div className="sidebar-divider" />
         <nav className="sidebar-secondary" aria-label="Account navigation">
           <button type="button" className={page === 'profile' ? 'active' : ''} aria-current={page === 'profile' ? 'page' : undefined} onClick={() => navigate('profile')}>
@@ -96,7 +132,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
           <div className="mobile-brand">
             <span className="brand-mark">A</span><span>AVIRZO</span>
           </div>
-          <div className="topbar-page-title">{NAV.find(x => x.id === active)?.label || (page === 'profile' ? 'Profile' : 'Settings')} {inProjectRoute && projectName ? <span className="topbar-project-context">· {projectName}</span> : null}</div>
+          <div className="topbar-page-title">{NAV_LOOKUP.find(x => x.id === active)?.label || (page === 'profile' ? 'Profile' : 'Settings')} {inProjectRoute && projectName ? <span className="topbar-project-context">· {projectName}</span> : null}</div>
           <button className="topbar-profile" type="button" onClick={() => navigate('profile')} aria-label="Open profile">
             {authUser?.email?.slice(0, 1)?.toUpperCase() || 'A'}
           </button>
@@ -109,11 +145,18 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
           <button className="mobile-more-backdrop" type="button" aria-label="Close menu" onClick={() => setMoreOpen(false)} />
           <div className="mobile-more-panel">
             <div className="mobile-more-head"><strong>AVIRZO</strong><button type="button" onClick={() => setMoreOpen(false)}>Close</button></div>
-            <div className="mobile-more-grid">
-              {MORE.map(item => (
-                <button key={item.id} type="button" className={page === item.id ? 'active' : ''} aria-current={page === item.id ? 'page' : undefined} onClick={() => { setMoreOpen(false); navigate(item.id); }}>
-                  <span aria-hidden="true">{item.icon}</span><strong>{item.label}</strong>
-                </button>
+            <div className="mobile-more-groups">
+              {MORE_GROUPS.map(group => (
+                <section className="mobile-more-group" key={group.label}>
+                  <div className="mobile-more-label">{group.label}</div>
+                  <div className="mobile-more-grid">
+                    {group.items.map(item => (
+                      <button key={item.id} type="button" className={page === item.id ? 'active' : ''} aria-current={page === item.id ? 'page' : undefined} onClick={() => { setMoreOpen(false); navigate(item.id); }}>
+                        <span aria-hidden="true">{item.icon}</span><strong>{item.label}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           </div>
@@ -122,7 +165,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         {BOTTOM.map(id => {
           if (id === 'more') return <button key="more" type="button" className={moreOpen ? 'active' : ''} aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen(v => !v)}><span aria-hidden="true">☰</span><small>More</small></button>;
-          const item = NAV.find(x => x.id === id);
+          const item = NAV_LOOKUP.find(x => x.id === id);
           return <button key={id} type="button" className={(inProjectRoute ? id === 'projects' : page === id) ? 'active' : ''} aria-current={(inProjectRoute ? id === 'projects' : page === id) ? 'page' : undefined} onClick={() => navigate(id)}><span aria-hidden="true">{item.icon}</span><small>{item.label}</small></button>;
         })}
       </nav>
