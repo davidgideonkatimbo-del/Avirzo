@@ -6,6 +6,10 @@ export function registerRoutes(app, ctx) {
   );
 
   app.get('/api/health', async (req, res) => {
+    // Public liveness probe (used by Render): no database access and no infrastructure details.
+    let signedIn = false;
+    try { signedIn = Boolean(await ctx.authUser(req)); } catch { signedIn = false; }
+    if (!signedIn) return res.json({ ok: true, app: 'Avirzo', version: APP_VERSION });
     let queueDepth = null;
     let workerLastSeenAt = null;
     let workerOnline = false;
@@ -23,7 +27,7 @@ export function registerRoutes(app, ctx) {
         .eq('service_name', 'avirzo-worker')
         .maybeSingle();
       workerLastSeenAt = data?.last_seen_at || null;
-      workerProjectRef = data?.project_ref || null;
+      workerProjectRef = data?.project_ref || null; // compared server-side only; never returned to clients
       workerOnline = Boolean(
         workerLastSeenAt &&
         Date.now() - Date.parse(workerLastSeenAt) < 30000 &&
@@ -46,7 +50,6 @@ export function registerRoutes(app, ctx) {
       workerConfigured: Boolean(supabaseAdmin && process.env.RUNWAYML_API_SECRET),
       workerOnline,
       workerLastSeenAt,
-      workerProjectRef,
       queueDepth
     });
   });

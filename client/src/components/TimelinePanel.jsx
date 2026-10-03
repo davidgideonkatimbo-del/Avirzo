@@ -18,7 +18,7 @@ export function TimelinePanel({
   audioTracks, captions, duckMusic, setDuckMusic,
   captionMode, setCaptionMode,
   exportQuality, setExportQuality,
-  includeSrt, setIncludeSrt,
+  includeSrt, setIncludeSrt, aiEndCard, setAiEndCard, review, setReview,
   addAudioTrack, updateAudio, removeAudio,
   addCaption, updateCaption, removeCaption,
   exporting, exportFilm, exportUrl, exportSrt,
@@ -75,20 +75,20 @@ export function TimelinePanel({
         <div className="audio-items">
           {audioTracks.length ? audioTracks.map(t => (
             <div className="audio-row" key={t.id}>
-              <input value={t.name} onChange={e => updateAudio(t.id, 'name', e.target.value)} placeholder="Track name" />
-              <select value={t.type} onChange={e => updateAudio(t.id, 'type', e.target.value)}>
+              <input aria-label="Track name" value={t.name} onChange={e => updateAudio(t.id, 'name', e.target.value)} placeholder="Track name" />
+              <select aria-label={`Audio track type for ${t.name || 'track'}`} value={t.type} onChange={e => updateAudio(t.id, 'type', e.target.value)}>
                 <option>dialogue</option>
                 <option>narration</option>
                 <option>ambience</option>
                 <option>music</option>
                 <option>sfx</option>
               </select>
-              <input value={t.src} onChange={e => updateAudio(t.id, 'src', e.target.value)} placeholder="Audio URL / generated data URL" />
-              <input type="number" step="0.1" value={t.start} onChange={e => updateAudio(t.id, 'start', Number(e.target.value))} placeholder="Start" />
-              <input type="number" step="0.1" value={t.duration} onChange={e => updateAudio(t.id, 'duration', Number(e.target.value))} placeholder="Duration" />
-              <input type="number" min="0" max="2" step="0.05" value={t.volume} onChange={e => updateAudio(t.id, 'volume', Number(e.target.value))} placeholder="Volume" />
-              <input type="number" min="0" step="0.1" value={t.fadeIn} onChange={e => updateAudio(t.id, 'fadeIn', Number(e.target.value))} placeholder="Fade in" />
-              <input type="number" min="0" step="0.1" value={t.fadeOut} onChange={e => updateAudio(t.id, 'fadeOut', Number(e.target.value))} placeholder="Fade out" />
+              <input aria-label="Audio URL / generated data URL" value={t.src} onChange={e => updateAudio(t.id, 'src', e.target.value)} placeholder="Audio URL / generated data URL" />
+              <input aria-label="Start" type="number" step="0.1" value={t.start} onChange={e => updateAudio(t.id, 'start', Number(e.target.value))} placeholder="Start" />
+              <input aria-label="Duration" type="number" step="0.1" value={t.duration} onChange={e => updateAudio(t.id, 'duration', Number(e.target.value))} placeholder="Duration" />
+              <input aria-label="Volume" type="number" min="0" max="2" step="0.05" value={t.volume} onChange={e => updateAudio(t.id, 'volume', Number(e.target.value))} placeholder="Volume" />
+              <input aria-label="Fade in" type="number" min="0" step="0.1" value={t.fadeIn} onChange={e => updateAudio(t.id, 'fadeIn', Number(e.target.value))} placeholder="Fade in" />
+              <input aria-label="Fade out" type="number" min="0" step="0.1" value={t.fadeOut} onChange={e => updateAudio(t.id, 'fadeOut', Number(e.target.value))} placeholder="Fade out" />
               <button type="button" onClick={() => removeAudio(t.id)}>Remove</button>
             </div>
           )) : (
@@ -101,6 +101,19 @@ export function TimelinePanel({
         </label>
       </div>
 
+      <div className="timeline-track premium-export-options">
+        <div className="track-label">FINISHING</div>
+        <label className="duck-toggle"><input type="checkbox" checked={aiEndCard} onChange={e => setAiEndCard(e.target.checked)} /> Add optional “AI-generated” end card</label>
+        <label className="duck-toggle"><input type="checkbox" checked={review?.enabled === true} onChange={e => setReview(r => ({...r, enabled:e.target.checked}))} /> Prepare this film for community review</label>
+        {review?.enabled && <div className="card-inset">
+          <div className="eyebrow">REVIEW NOTES</div>
+          <textarea aria-label="Community review note" placeholder="Ask a community reviewer about history, language, cultural detail or representation…" onChange={e => setReview(r => ({...r, draft:e.target.value}))} value={review?.draft || ''} />
+          <button type="button" className="mini-btn" onClick={() => { const note=String(review?.draft||'').trim(); if(!note) return; setReview(r => ({...r, notes:[...(r.notes||[]), {id:`review-${Date.now()}`,text:note,createdAt:new Date().toISOString()}],draft:''})); }}>Add review note</button>
+          {!!review?.notes?.length && <div className="member-list">{review.notes.map(n => <div className="member-row" key={n.id}><div><strong>Community review</strong><small>{n.text}</small></div></div>)}</div>}
+        </div>}
+        <small className="muted">The review stage is optional. It never blocks a solo filmmaker from exporting.</small>
+      </div>
+
       <div className="timeline-track caption-track">
         <div className="track-label">
           CAPTIONS
@@ -109,9 +122,9 @@ export function TimelinePanel({
         <div className="audio-items">
           {captions.length ? captions.map(c => (
             <div className="audio-row" key={c.id}>
-              <input type="number" step="0.1" value={c.start} onChange={e => updateCaption(c.id, 'start', Number(e.target.value))} placeholder="Start" />
-              <input type="number" step="0.1" value={c.end} onChange={e => updateCaption(c.id, 'end', Number(e.target.value))} placeholder="End" />
-              <input className="caption-text" value={c.text} onChange={e => updateCaption(c.id, 'text', e.target.value)} placeholder="Caption text" />
+              <input aria-label="Start" type="number" step="0.1" value={c.start} onChange={e => updateCaption(c.id, 'start', Number(e.target.value))} placeholder="Start" />
+              <input aria-label="End" type="number" step="0.1" value={c.end} onChange={e => updateCaption(c.id, 'end', Number(e.target.value))} placeholder="End" />
+              <input aria-label="Caption text" className="caption-text" value={c.text} onChange={e => updateCaption(c.id, 'text', e.target.value)} placeholder="Caption text" />
               <button type="button" onClick={() => removeCaption(c.id)}>Remove</button>
             </div>
           )) : (

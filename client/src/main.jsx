@@ -1,14 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { supabase, supabaseEnabled } from './supabase';
 import { useJobs } from './hooks/useJobs';
 import { JobCenter } from './components/JobCenter';
-import { HealthPanel } from './components/HealthPanel';
 import { TemplatePicker } from './components/TemplatePicker';
-import { StudioNav } from './components/StudioNav';
+import { AppShell } from './components/AppShell';
+import { ProfilePanel } from './components/ProfilePanel';
+import { SettingsPanel } from './components/SettingsPanel';
 import { VoicesPanel } from './components/VoicesPanel';
-import { StudioPanels } from './components/StudioPanels';
+import { ProjectsPanel } from './components/ProjectsPanel';
+import { ResearchPanel } from './components/ResearchPanel';
+import { TimelinePanel } from './components/TimelinePanel';
+import { CharacterBible } from './components/CharacterBible';
 import { StoryComposer } from './components/StoryComposer';
 import { Storyboard } from './components/Storyboard';
 import { FilmLookControls } from './components/FilmLookControls';
@@ -18,12 +22,31 @@ import { RootsFoundation } from './components/RootsFoundation';
 import { StoryIntelligencePanel } from './components/StoryIntelligencePanel';
 import { WorldBible } from './components/WorldBible';
 import { CharacterContinuity } from './components/CharacterContinuity';
+import { AssetsPanel } from './components/AssetsPanel';
+import { ProjectWorkspace } from './components/ProjectWorkspace';
 import {
   africanProfiles,
-  emptyCharacter, emptyResearch, heritageTemplates
+  emptyCharacter, emptyResearch, heritageTemplates, styles, cameras, formats, durations
 } from './constants';
 
+class AppErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={hasError:false,error:null}; }
+  static getDerivedStateFromError(error){ return {hasError:true,error}; }
+  componentDidCatch(error,info){ console.error('Avirzo UI error',error,info); }
+  render(){
+    if(!this.state.hasError) return this.props.children;
+    return <main className="error-screen"><div className="error-card"><div className="brand"><span className="brand-mark">A</span><span>AVIRZO</span></div><div className="eyebrow">STUDIO RECOVERY</div><h1>Something interrupted the studio.</h1><p>The project has not been deleted. Reload the studio and try the last action again.</p><button className="generate" type="button" onClick={()=>window.location.reload()}>Reload Avirzo</button>{this.state.error?.message&&<small>{this.state.error.message}</small>}</div></main>;
+  }
+}
+
 function App(){
+  const [page,setPage]=useState(()=>window.location.hash.replace(/^#\/?/, '') || 'home');
+  const navigate=(next)=>{ const target=next||'home'; window.location.hash=`/${target}`; setPage(target); window.scrollTo({top:0,behavior:'auto'}); };
+  const viewPage = page.startsWith('project/') ? (page.split('/')[2] || 'overview') : page;
+  const routeProjectId = page.startsWith('project/') ? (page.split('/')[1] || '') : '';
+  const inProjectRoute = page.startsWith('project/');
+  useEffect(()=>{ const params=new URLSearchParams(window.location.search); const b=params.get('billing'); if(!b) return; const text={success:'Payment received. Your plan updates in a moment — open Billing to check it.',cancelled:'Checkout was canceled. You have not been charged.',return:'Welcome back. Your billing changes will appear shortly.'}[b]; if(text) setMessage(text); params.delete('billing'); const qs=params.toString(); window.history.replaceState(null,'',window.location.pathname+(qs?`?${qs}`:'')+window.location.hash); },[]);
+  useEffect(()=>{ const onHash=()=>{ const next=window.location.hash.replace(/^#\/?/, '') || 'home'; setPage(next); window.scrollTo(0,0); }; window.addEventListener('hashchange',onHash); return ()=>window.removeEventListener('hashchange',onHash); },[]);
   const [mode,setMode]=useState('story');
   const [story,setStory]=useState('A young boy walks with his grandfather through a Buganda village before sunrise. The grandfather tells him an old story about their ancestors and the responsibility of protecting the family land.');
   const [style,setStyle]=useState('Historical drama'); const [camera,setCamera]=useState('Slow dolly'); const [duration,setDuration]=useState('5 sec'); const [format,setFormat]=useState('16:9');
@@ -31,13 +54,14 @@ function App(){
   const [scenes,setScenes]=useState([]); const [characters,setCharacters]=useState([]); const [showBible,setShowBible]=useState(false); const [showResearch,setShowResearch]=useState(false); const [draft,setDraft]=useState(emptyCharacter);
   const [research,setResearch]=useState(emptyResearch); const [showContinuity,setShowContinuity]=useState(true); const [worldBible,setWorldBible]=useState({locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}); const [researchStatus,setResearchStatus]=useState('');
   const [showVoices,setShowVoices]=useState(false); const [voiceStatus,setVoiceStatus]=useState(''); const [voiceGenerating,setVoiceGenerating]=useState(false); const [voiceAudio,setVoiceAudio]=useState('');
-  const [loadingPlan,setLoadingPlan]=useState(false); const [timelineOpen,setTimelineOpen]=useState(false); const [timeline,setTimeline]=useState([]); const [audioTracks,setAudioTracks]=useState([]); const [captions,setCaptions]=useState([]); const [duckMusic,setDuckMusic]=useState(true); const [captionMode,setCaptionMode]=useState('burn'); const [exportQuality,setExportQuality]=useState('standard'); const [includeSrt,setIncludeSrt]=useState(true); const [exportSrt,setExportSrt]=useState(''); const [exporting,setExporting]=useState(false); const [exportUrl,setExportUrl]=useState(''); const [characterStatus,setCharacterStatus]=useState(''); const [generating,setGenerating]=useState(false); const [message,setMessage]=useState(''); const [videoUrl,setVideoUrl]=useState('');
+  const [loadingPlan,setLoadingPlan]=useState(false); const [review,setReview]=useState({enabled:false,notes:[]}); const [aiEndCard,setAiEndCard]=useState(false); const [timelineOpen,setTimelineOpen]=useState(false); const [timeline,setTimeline]=useState([]); const [audioTracks,setAudioTracks]=useState([]); const [captions,setCaptions]=useState([]); const [duckMusic,setDuckMusic]=useState(true); const [captionMode,setCaptionMode]=useState('burn'); const [exportQuality,setExportQuality]=useState('standard'); const [includeSrt,setIncludeSrt]=useState(true); const [exportSrt,setExportSrt]=useState(''); const [exporting,setExporting]=useState(false); const [exportUrl,setExportUrl]=useState(''); const [characterStatus,setCharacterStatus]=useState(''); const [generating,setGenerating]=useState(false); const [message,setMessage]=useState(''); const [videoUrl,setVideoUrl]=useState('');
   const [authUser,setAuthUser]=useState(null); const [authEmail,setAuthEmail]=useState(''); const [authPassword,setAuthPassword]=useState(''); const [authMode,setAuthMode]=useState('signin'); const [authStatus,setAuthStatus]=useState(''); const [authLoading,setAuthLoading]=useState(false);
+  const [projectFolder,setProjectFolder]=useState('My Films'); const [projectFolderFilter,setProjectFolderFilter]=useState('All folders');
   const [showAICopilot,setShowAICopilot]=useState(true); const [showProjects,setShowProjects]=useState(false); const [showProduction,setShowProduction]=useState(false); const [showCollaboration,setShowCollaboration]=useState(false); const [showBilling,setShowBilling]=useState(false); const [projectId,setProjectId]=useState(''); const [projectName,setProjectName]=useState('My Avirzo Film'); const [projects,setProjects]=useState([]); const [projectStatus,setProjectStatus]=useState(''); const [projectLoading,setProjectLoading]=useState(false); const [assets,setAssets]=useState([]); const [showTemplates,setShowTemplates]=useState(true); const [activeTemplateId,setActiveTemplateId]=useState(''); const [assetStatus,setAssetStatus]=useState('');
   const profile=useMemo(()=>africanProfiles.find(x=>x.id===africanProfile),[africanProfile]);
 
-  async function authHeaders(){ if(!supabase) return {}; const {data}=await supabase.auth.getSession(); return data.session?.access_token?{Authorization:`Bearer ${data.session.access_token}`}:{ }; }
-  async function apiFetch(url, options={}){ const headers={...(options.headers||{}),...(await authHeaders())}; return fetch(url,{...options,headers}); }
+  const authHeaders=useCallback(async()=>{ if(!supabase) return {}; const {data}=await supabase.auth.getSession(); return data.session?.access_token?{Authorization:`Bearer ${data.session.access_token}`}:{ }; },[]);
+  const apiFetch=useCallback(async(url, options={})=>{ const headers={...(options.headers||{}),...(await authHeaders())}; return fetch(url,{...options,headers}); },[authHeaders]);
   const [activeJobId,setActiveJobId]=useState(''); const [cancelingJobId,setCancelingJobId]=useState(''); const [retryingJobId,setRetryingJobId]=useState(''); const [exportJobId,setExportJobId]=useState('');
   const { jobs, recentJobs, refreshJobs, cancelJob, retryJob } = useJobs(apiFetch, Boolean(authUser), projectId);
   async function cancelActiveJob(id){ setCancelingJobId(id); try{ await cancelJob(id); setActiveJobId(''); setGenerating(false); setExporting(false); setMessage('Job canceled.'); }catch(e){setMessage(e.message||'Could not cancel job.')}finally{setCancelingJobId('');} }
@@ -75,7 +99,7 @@ function App(){
     setShowResearch(Boolean(tpl.research?.location || tpl.research?.verifiedFacts));
   }
 
-  function projectPayload(){ return { name:projectName.trim()||'Untitled Avirzo Film', rootsFoundation, mode, story, style, camera, duration, format, africanProfile, era, storyType, historicalNotes, scenes, characters, research, worldBible, timeline, audioTracks, captions, duckMusic, captionMode, exportQuality, includeSrt, exportUrl }; }
+  function projectPayload(){ return { name:projectName.trim()||'Untitled Avirzo Film', folder:projectFolder.trim()||'My Films', rootsFoundation, mode, story, style, camera, duration, format, africanProfile, era, storyType, historicalNotes, scenes, characters, research, worldBible, timeline, audioTracks, captions, duckMusic, captionMode, exportQuality, includeSrt, review, aiEndCard, exportUrl }; }
   async function refreshProjects(){ try{const r=await apiFetch('/api/projects'); const d=await r.json(); if(r.ok)setProjects(d.projects||[]);}catch(e){setProjectStatus('Project library is unavailable.');} }
   async function refreshAssets(){ if(!supabaseEnabled||!authUser||!projectId)return; try{const r=await apiFetch(`/api/assets?projectId=${encodeURIComponent(projectId)}`); const d=await r.json(); if(r.ok)setAssets(d.assets||[]);}catch(e){setAssetStatus('Media library is unavailable.');} }
   async function persistAsset(sourceUrl,kind,name){ if(!projectId||!supabaseEnabled||!authUser||!/^https:\/\//i.test(String(sourceUrl||''))) return null; try{const r=await apiFetch('/api/assets/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectId,sourceUrl,kind,name})}); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not archive media.'); setAssets(p=>[d.asset,...p.filter(x=>x.id!==d.asset.id)]); return d; }catch(e){setAssetStatus(e.message||'Could not archive media.'); return null;} }
@@ -83,18 +107,20 @@ function App(){
   async function openStoragePath(storagePath){ if(!storagePath)return ''; try{const r=await apiFetch('/api/assets/signed-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({storagePath})}); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not open stored media.'); return d.url||'';}catch(e){setAssetStatus(e.message||'Could not open stored media.'); return ''; } }
   async function resolveCharacterMedia(character, kind='image'){ if(!character)return ''; const dataKey=kind==='image'?'referenceImageData':'performanceVideoData'; const assetKey=kind==='image'?'referenceAssetId':'performanceAssetId'; const pathKey=kind==='image'?'mediaStoragePath':'performanceStoragePath'; const urlKey=kind==='image'?'referenceImageUrl':'performanceVideoUrl'; if(character[dataKey])return character[dataKey]; if(character[assetKey]){const u=await openAsset(character[assetKey]); if(u)return u;} if(character[pathKey]){const u=await openStoragePath(character[pathKey]); if(u)return u;} return character[urlKey]||''; }
   async function deleteAsset(assetId){ if(!confirm('Delete this stored media asset?'))return; try{const r=await apiFetch(`/api/assets/${assetId}`,{method:'DELETE'}); if(!r.ok)throw new Error('Could not delete asset.'); setAssets(p=>p.filter(x=>x.id!==assetId)); setAssetStatus('Asset deleted from private storage.');}catch(e){setAssetStatus(e.message||'Could not delete asset.');} }
-  async function saveProject(){ setProjectLoading(true); setProjectStatus('Saving project…'); try{const payload=projectPayload(); const r=await apiFetch(projectId?`/api/projects/${projectId}`:'/api/projects',{method:projectId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not save project.'); setProjectId(d.project.id); setProjectName(d.project.name); await refreshProjects(); setProjectStatus('Project saved to the server library.');}catch(e){setProjectStatus(e.message||'Could not save project.')}finally{setProjectLoading(false)} }
-  async function loadProject(id){ setProjectLoading(true); setProjectStatus('Loading project…'); try{const r=await apiFetch(`/api/projects/${id}`); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not load project.'); const p=d.project; setProjectId(p.id); setProjectName(p.name||'Avirzo Film'); setMode(p.mode||'story'); setStory(p.story||''); setStyle(p.style||'Historical drama'); setCamera(p.camera||'Slow dolly'); setDuration(p.duration||'5 sec'); setFormat(p.format||'16:9'); setAfricanProfile(p.africanProfile||'uganda-lg'); setEra(p.era||'pre1994'); setStoryType(p.storyType||'oral'); setRootsFoundation(p.rootsFoundation||{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}); setHistoricalNotes(p.historicalNotes||''); setScenes(p.scenes||[]); setCharacters(p.characters||[]); setResearch(p.research||emptyResearch); setWorldBible(p.worldBible||{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}); setTimeline(p.timeline||[]); setAudioTracks(p.audioTracks||[]); setCaptions(p.captions||[]); setDuckMusic(p.duckMusic!==false); setCaptionMode(['burn','soft','none'].includes(p.captionMode)?p.captionMode:'burn'); setExportQuality(['draft','standard','high'].includes(p.exportQuality)?p.exportQuality:(['draft','standard','high'].includes(p.quality)?p.quality:'standard')); setIncludeSrt(p.includeSrt!==false); setExportUrl(p.exportUrl||''); setShowProjects(false); setProjectStatus(`Loaded “${p.name}”.`); if(Array.isArray(p.scenes)&&p.scenes.some(x=>x.assetId)){ const hydrated=await Promise.all(p.scenes.map(async x=>x.assetId?{...x,videoUrl:await openAsset(x.assetId)}:x)); setScenes(hydrated); }}catch(e){setProjectStatus(e.message||'Could not load project.')}finally{setProjectLoading(false)} }
+  async function saveProject(){ if(!authUser){setProjectStatus('Sign in first to save projects to the cloud library.');setShowProjects(true);return;} setProjectLoading(true); setProjectStatus('Saving project…'); try{const payload=projectPayload(); const r=await apiFetch(projectId?`/api/projects/${projectId}`:'/api/projects',{method:projectId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not save project.'); setProjectId(d.project.id); setProjectName(d.project.name); await refreshProjects(); setProjectStatus('Project saved to the server library.');}catch(e){setProjectStatus(e.message||'Could not save project.')}finally{setProjectLoading(false)} }
+  async function loadProject(id){ setProjectLoading(true); setProjectStatus('Loading project…'); try{const r=await apiFetch(`/api/projects/${id}`); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not load project.'); const p=d.project; setProjectId(p.id); setProjectName(p.name||'Avirzo Film'); setProjectFolder(p.folder||'My Films'); setMode(p.mode||'story'); setStory(p.story||''); setStyle(p.style||'Historical drama'); setCamera(p.camera||'Slow dolly'); setDuration(p.duration||'5 sec'); setFormat(p.format||'16:9'); setAfricanProfile(p.africanProfile||'uganda-lg'); setEra(p.era||'pre1994'); setStoryType(p.storyType||'oral'); setRootsFoundation(p.rootsFoundation||{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}); setHistoricalNotes(p.historicalNotes||''); setScenes(p.scenes||[]); setCharacters(p.characters||[]); setResearch(p.research||emptyResearch); setWorldBible(p.worldBible||{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}); setTimeline(p.timeline||[]); setAudioTracks(p.audioTracks||[]); setCaptions(p.captions||[]); setDuckMusic(p.duckMusic!==false); setCaptionMode(['burn','soft','none'].includes(p.captionMode)?p.captionMode:'burn'); setExportQuality(['draft','standard','high'].includes(p.exportQuality)?p.exportQuality:(['draft','standard','high'].includes(p.quality)?p.quality:'standard')); setIncludeSrt(p.includeSrt!==false); setReview(p.review||{enabled:false,notes:[]}); setAiEndCard(p.aiEndCard===true); setExportUrl(p.exportUrl||''); setShowProjects(false); setProjectStatus(`Loaded “${p.name}”.`); navigate(`project/${p.id}/overview`); if(Array.isArray(p.scenes)&&p.scenes.some(x=>x.assetId)){ const hydrated=await Promise.all(p.scenes.map(async x=>x.assetId?{...x,videoUrl:await openAsset(x.assetId)}:x)); setScenes(hydrated); }}catch(e){setProjectStatus(e.message||'Could not load project.')}finally{setProjectLoading(false)} }
   async function deleteProject(id){ if(!confirm('Delete this saved Avirzo project?')) return; try{const r=await apiFetch(`/api/projects/${id}`,{method:'DELETE'}); if(!r.ok)throw new Error('Could not delete project.'); if(projectId===id){setProjectId('');setProjectName('My Avirzo Film');} await refreshProjects(); setProjectStatus('Project deleted.');}catch(e){setProjectStatus(e.message)} }
-  function newProject(){ setProjectId('');setProjectName('My Avirzo Film');setStory('');setScenes([]);setCharacters([]);setResearch(emptyResearch);setWorldBible({locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''});setRootsFoundation({community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''});setTimeline([]);setAudioTracks([]);setCaptions([]);setExportUrl('');setVideoUrl('');setMessage('New project started.');setShowProjects(false); }
+  function newProject(){ setProjectId('');setProjectName('My Avirzo Film');setProjectFolder('My Films');setMode('story');setAfricanProfile('uganda-lg');setEra('pre1994');setStoryType('oral');setStyle('Historical drama');setCamera('Slow dolly');setDuration('5 sec');setFormat('16:9');setStory('');setHistoricalNotes('');setScenes([]);setCharacters([]);setResearch({...emptyResearch});setWorldBible({locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''});setRootsFoundation({community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''});setTimeline([]);setAudioTracks([]);setCaptions([]);setExportUrl('');setExportSrt('');setVideoUrl('');setActiveTemplateId('');setMessage('New project started.');setShowProjects(false); }
   useEffect(()=>{ if(showProjects){ refreshProjects(); refreshAssets(); } },[showProjects,projectId,authUser]);
+  useEffect(()=>{ if(routeProjectId && authUser && routeProjectId!==projectId && !projectLoading) loadProject(routeProjectId); },[routeProjectId,authUser,projectId,projectLoading]);
 
   async function makeStoryboard(){
     if(!story.trim()) return setMessage('Write a story first.'); setLoadingPlan(true); setMessage('Building your heritage shot list…');
     try{const r=await apiFetch('/api/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({story,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research})}); const data=await r.json(); if(!r.ok) throw new Error(data.message||'Could not build storyboard.'); setScenes(data.scenes.map((s,i)=>({...s,primaryCharacterId:characters[0]?.id||''}))); setTimeline([]); setExportUrl(''); setMessage(`${data.scenes.length} scenes ready. Character continuity is attached.`);}catch(e){setMessage(e.message)}finally{setLoadingPlan(false)}
   }
   function updateScene(id,key,value){setScenes(p=>p.map(s=>s.id===id?{...s,[key]:value}:s));}
-  function syncTimeline(nextScenes=scenes){ const ready=nextScenes.filter(s=>s.videoUrl).map((s,i)=>({id:s.id,type:'video',sceneNumber:s.number,title:s.title,src:s.videoUrl,start:i*5,duration:5})); setTimeline(ready); }
+  function sceneDurationSeconds(value=duration){ const match=String(value).match(/(\d+(?:\.\d+)?)/); return match ? Number(match[1]) : 5; }
+  function syncTimeline(nextScenes=scenes){ let cursor=0; const ready=nextScenes.filter(s=>s.videoUrl).map(s=>{ const seconds=sceneDurationSeconds(s.duration||duration); const item={id:s.id,type:'video',sceneNumber:s.number,title:s.title,src:s.videoUrl,start:cursor,duration:seconds}; cursor+=seconds; return item; }); setTimeline(ready); }
   function moveScene(id,dir){setScenes(prev=>{const a=[...prev],i=a.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=a.length)return a;[a[i],a[j]]=[a[j],a[i]];return a.map((x,k)=>({...x,number:k+1}));});}
   function addAudioTrack(){setAudioTracks(p=>[...p,{id:`audio-${Date.now()}`,name:'New audio track',type:'dialogue',src:'',start:0,duration:5,volume:1,fadeIn:0,fadeOut:0,notes:''}]);}
   function addCaption(){setCaptions(p=>[...p,{id:`caption-${Date.now()}`,start:0,end:3,text:''}]);}
@@ -102,9 +128,9 @@ function App(){
   function removeCaption(id){setCaptions(p=>p.filter(x=>x.id!==id));}
   function updateAudio(id,key,value){setAudioTracks(p=>p.map(x=>x.id===id?{...x,[key]:value}:x));}
   function removeAudio(id){setAudioTracks(p=>p.filter(x=>x.id!==id));}
-  async function exportFilm(){const ordered=scenes.filter(s=>s.videoUrl);if(!ordered.length)return setMessage('Generate at least one scene before exporting.');setExporting(true);setExportUrl('');setExportSrt('');setMessage('Submitting film export to the production worker…');try{const payload={title:'Avirzo film',projectId,format,scenes:ordered.map(s=>({id:s.id,number:s.number,title:s.title,videoUrl:s.videoUrl,assetId:s.assetId||null})),audioTracks,captions,duckMusic,captionMode,quality:exportQuality,includeSrt};const r=await apiFetch('/api/export/film',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.message||'Film export failed.');setExportJobId(d.jobId||'');if(d.downloadUrl){setExportUrl(d.downloadUrl);if(d.srt)setExportSrt(d.srt);setExporting(false);const archived=d.assetId ? {asset:{id:d.assetId},url:d.downloadUrl} : await persistAsset(d.downloadUrl,'export',projectName||'avirzo-film');if(archived?.url)setExportUrl(archived.url);setMessage(`Film assembled${d.captionMode?` · captions ${d.captionMode}`:''}${d.quality?` · ${d.quality} quality`:''}.`);}else{setMessage('Film export queued. You can keep working while the worker renders it.');}}catch(e){setMessage(e.message||'Film export failed.');setExporting(false)}}
+  async function exportFilm(){const ordered=scenes.filter(s=>s.videoUrl);if(!ordered.length)return setMessage('Generate at least one scene before exporting.');setExporting(true);setExportUrl('');setExportSrt('');setMessage('Submitting film export to the production worker…');try{const payload={title:'Avirzo film',projectId,format,scenes:ordered.map(s=>({id:s.id,number:s.number,title:s.title,videoUrl:s.videoUrl,assetId:s.assetId||null})),audioTracks,captions,duckMusic,captionMode,quality:exportQuality,includeSrt,aiEndCard};const r=await apiFetch('/api/export/film',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.message||'Film export failed.');setExportJobId(d.jobId||'');if(d.downloadUrl){setExportUrl(d.downloadUrl);if(d.srt)setExportSrt(d.srt);setExporting(false);const archived=d.assetId ? {asset:{id:d.assetId},url:d.downloadUrl} : await persistAsset(d.downloadUrl,'export',projectName||'avirzo-film');if(archived?.url)setExportUrl(archived.url);setMessage(`Film assembled${d.captionMode?` · captions ${d.captionMode}`:''}${d.quality?` · ${d.quality} quality`:''}.`);}else{setMessage('Film export queued. You can keep working while the worker renders it.');}}catch(e){setMessage(e.message||'Film export failed.');setExporting(false)}}
 
-  async function addCharacter(){ if(!draft.name.trim()) return setMessage('Give the character a name first.'); const candidate={...draft,id:`char-${Date.now()}`}; const r=await apiFetch('/api/characters/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({characters:[candidate]})}); const data=await r.json().catch(()=>({})); if(!data.ok){setCharacterStatus(data.warnings?.join(' '));} else {setCharacterStatus('Visual identity is complete enough for continuity prompts.');} setCharacters(p=>[...p,candidate]); setDraft(emptyCharacter); setMessage(`${draft.name} added to the Heritage Bible.`); }
+  async function addCharacter(){ if(!draft.name.trim()) return setMessage('Give the character a name first.'); const candidate={...draft,id:`char-${Date.now()}-${Math.random().toString(36).slice(2,7)}`}; try{ const r=await apiFetch('/api/characters/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({characters:[candidate]})}); const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.message||'Character validation failed.'); if(!data.ok){setCharacterStatus(data.warnings?.join(' '));} else {setCharacterStatus('Visual identity is complete enough for continuity prompts.');} setCharacters(p=>[...p,candidate]); setDraft({...emptyCharacter}); setMessage(`${draft.name} added to the Heritage Bible.`); }catch(e){setCharacterStatus(e.message||'Could not validate the character.');setMessage('Character was not added because validation could not be completed.');} }
   function removeCharacter(id){setCharacters(p=>p.filter(c=>c.id!==id));}
   async function checkSceneContinuity(scene){
     const r=await apiFetch('/api/ai/scene-continuity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene,characters:characters.map(characterPayload),worldBible,rootsFoundation,era})});
@@ -115,21 +141,21 @@ function App(){
   }
   async function generateScene(scene){
     setGenerating(true); setVideoUrl(''); updateScene(scene.id,'status','rendering'); setMessage(`Rendering scene ${scene.number}…`);
-    const refChar=characterForScene(scene); const refImage=await resolveCharacterMedia(refChar,'image');
-    try{const guard=await checkSceneContinuity(scene); if(!guard.ready){updateScene(scene.id,'status','blocked');setMessage(`Scene ${scene.number} blocked by continuity: ${guard.blockers.join(' ')}`);return;} const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scene.prompt,style,camera:scene.camera,duration,format,sceneNumber:scene.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage,referenceCharacter:characterPayload(refChar),projectId,worldBible,continuityContext:guard.continuityContext,primaryCharacterId:scene.primaryCharacterId})}); const data=await r.json(); if(!r.ok) throw new Error(data.message||'Generation request failed.'); setActiveJobId(data.jobId||''); const result=await pollTask(data.taskId,data.jobId); const url=result.videoUrl||''; const archived=result.archivedAsset ? {asset:result.archivedAsset,url:await openAsset(result.archivedAsset.id)} : await persistAsset(url,'video',`scene-${scene.number}`); updateScene(scene.id,'status','ready'); updateScene(scene.id,'videoUrl',archived?.url||url); if(archived) { updateScene(scene.id,'assetId',archived.asset.id); updateScene(scene.id,'assetStoragePath',archived.asset.storage_path); } setVideoUrl(archived?.url||url); setTimeline(prev=>[...prev.filter(x=>x.id!==scene.id),{id:scene.id,type:'video',sceneNumber:scene.number,title:scene.title,src:url,start:prev.length*5,duration:5}]); setMessage(`Scene ${scene.number} is ready.`);}catch(e){updateScene(scene.id,'status','failed');setMessage(e.message||'Generation failed.')}finally{setGenerating(false)}
+    try{const refChar=characterForScene(scene); const refImage=await resolveCharacterMedia(refChar,'image'); const guard=await checkSceneContinuity(scene); if(!guard.ready){updateScene(scene.id,'status','blocked');setMessage(`Scene ${scene.number} blocked by continuity: ${guard.blockers.join(' ')}`);return;} const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scene.prompt,style,camera:scene.camera,duration,format,sceneNumber:scene.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage,referenceCharacter:characterPayload(refChar),projectId,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:scene.primaryCharacterId})}); const data=await r.json(); if(!r.ok) throw new Error(data.message||'Generation request failed.'); setActiveJobId(data.jobId||''); const result=await pollTask(data.taskId,data.jobId); const url=result.videoUrl||''; const archived=result.archivedAsset ? {asset:result.archivedAsset,url:await openAsset(result.archivedAsset.id)} : await persistAsset(url,'video',`scene-${scene.number}`); updateScene(scene.id,'status','ready'); updateScene(scene.id,'videoUrl',archived?.url||url); if(archived) { updateScene(scene.id,'assetId',archived.asset.id); updateScene(scene.id,'assetStoragePath',archived.asset.storage_path); } setVideoUrl(archived?.url||url); setTimeline(prev=>{ const next=prev.filter(x=>x.id!==scene.id); const seconds=sceneDurationSeconds(scene.duration||duration); const start=next.reduce((sum,x)=>sum+Number(x.duration||5),0); return [...next,{id:scene.id,type:'video',sceneNumber:scene.number,title:scene.title,src:archived?.url||url,start,duration:seconds}]; }); setMessage(`Scene ${scene.number} is ready.`);}catch(e){updateScene(scene.id,'status','failed');setMessage(e.message||'Generation failed.')}finally{setGenerating(false)}
   }
   async function generateAll(){
     if(!scenes.length)return setMessage('Build the storyboard first.');
     setGenerating(true);
     const generated=[];
+    let currentScene=null;
     try{
-      for(const scene of scenes){
+      for(const scene of scenes){ currentScene=scene;
         setMessage(`Rendering scene ${scene.number} of ${scenes.length}…`);
         updateScene(scene.id,'status','rendering');
         const refChar=characterForScene(scene);
         const refImage=await resolveCharacterMedia(refChar,'image');
         const guard=await checkSceneContinuity(scene); if(!guard.ready){updateScene(scene.id,'status','blocked');throw new Error(`Scene ${scene.number} blocked by continuity: ${guard.blockers.join(' ')}`);}
-        const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scene.prompt,style,camera,duration,format,sceneNumber:scene.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage,referenceCharacter:characterPayload(refChar),projectId,worldBible,continuityContext:guard.continuityContext,primaryCharacterId:scene.primaryCharacterId})});
+        const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scene.prompt,style,camera,duration,format,sceneNumber:scene.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage,referenceCharacter:characterPayload(refChar),projectId,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:scene.primaryCharacterId})});
         const data=await r.json();
         if(!r.ok) throw new Error(data.message||`Scene ${scene.number} failed.`);
         setActiveJobId(data.jobId||'');
@@ -142,9 +168,9 @@ function App(){
         if(archived){ updateScene(scene.id,'assetId',archived.asset.id); updateScene(scene.id,'assetStoragePath',archived.asset.storage_path); }
         generated.push({...scene,videoUrl:finalUrl,status:'ready',assetId:archived?.asset?.id||scene.assetId||'',assetStoragePath:archived?.asset?.storage_path||scene.assetStoragePath||''});
       }
-      setTimeline(generated.map((s,i)=>({...s,type:'video',sceneNumber:s.number,title:s.title,src:s.videoUrl,start:i*5,duration:5})).filter(x=>x.src));
+      let cursor=0; setTimeline(generated.filter(x=>x.videoUrl).map(s=>{const seconds=sceneDurationSeconds(s.duration||duration);const item={...s,type:'video',sceneNumber:s.number,title:s.title,src:s.videoUrl,start:cursor,duration:seconds};cursor+=seconds;return item;}));
       setMessage('All scenes are ready.');
-    }catch(e){setMessage(e.message||'The film generation stopped.')}finally{setGenerating(false)}
+    }catch(e){ if(currentScene?.id) updateScene(currentScene.id,'status','failed'); setMessage(e.message||'The film generation stopped.')}finally{setGenerating(false)}
   }
 
   async function pollTask(taskId,jobId=''){for(let i=0;i<72;i++){await new Promise(r=>setTimeout(r,5000));const r=await apiFetch(`/api/generate/${encodeURIComponent(taskId)}`);const d=await r.json();if(!r.ok)throw new Error(d.message||'Could not retrieve generation status.');if(jobId) await refreshJobs(); if(d.status==='succeeded'){setActiveJobId('');return d;}if(d.status==='failed'||d.status==='canceled'){setActiveJobId('');throw new Error(d.message||'Video generation failed.');}}throw new Error('Generation is taking longer than expected.');}
@@ -159,8 +185,8 @@ function App(){
       const d=await r.json(); if(!r.ok) throw new Error(d.message||'Character performance request failed.');
       setCharacters(p=>p.map(c=>c.id===character.id?{...c,performanceStatus:'rendering',performanceTaskId:d.taskId}:c));
       setCharacterStatus(`${character.name}'s character performance is rendering…`);
-      const result=await pollTask(d.taskId); const url=result.videoUrl||'';
-      setCharacters(p=>p.map(c=>c.id===character.id?{...c,performanceStatus:'ready',performanceVideoUrl:url,performanceAssetId:result.archivedAsset?.id||c.performanceAssetId||''}:c));
+      const result=await pollTask(d.taskId); const url=result.videoUrl||''; const archivedUrl=result.archivedAsset?.id ? await openAsset(result.archivedAsset.id) : '';
+      setCharacters(p=>p.map(c=>c.id===character.id?{...c,performanceStatus:'ready',performanceVideoUrl:archivedUrl||url,performanceAssetId:result.archivedAsset?.id||c.performanceAssetId||'',performanceStoragePath:result.archivedAsset?.storage_path||c.performanceStoragePath||''}:c));
       setCharacterStatus(`${character.name}'s performance render is ready. Add its audio/dialogue as a timeline track when assembling the film.`);
     }catch(e){setCharacters(p=>p.map(c=>c.id===character.id?{...c,performanceStatus:'failed'}:c));setCharacterStatus(e.message||'Character performance failed.');}
   }
@@ -172,68 +198,121 @@ function App(){
     try{const r=await apiFetch('/api/voice/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:character.dialogue,voiceId:character.voiceId,voiceLanguageCode:character.voiceLanguageCode,provider:character.voiceProvider||'elevenlabs',africanProfile,modelId:'eleven_v3',projectId})}); const d=await r.json(); if(!r.ok) throw new Error(d.message||'Voice generation failed.'); setVoiceAudio(d.audioUrl || ''); setVoiceStatus(`${character.name}'s voice is ready. Language profile: ${d.language}${d.archivedAsset ? ' · archived in private cloud storage.' : ''}`);}catch(e){setVoiceStatus(e.message||'Voice generation failed.')}finally{setVoiceGenerating(false)}
   }
 
-  return <div className="app">
-    <header className="topbar"><div className="brand"><span className="brand-mark">A</span><span>AVIRZO</span></div><div className="studio-badge">AFRICAN AI CINEMA</div></header>
-    <main><HealthPanel apiFetch={apiFetch}/><JobCenter jobs={jobs} recent={recentJobs} busyJobId={cancelingJobId} retryingJobId={retryingJobId} onCancel={cancelActiveJob} onRetry={retryActiveJob}/>
-      <section className="hero"><div className="eyebrow">HERITAGE AI FILMMAKER · v2.8.2</div><h1>Let the world<br/><em>see where we come from.</em></h1><p>Build films rooted in African history, oral tradition, language and lived cultural detail — with guided workflows, character continuity and production-grade export.</p>{activeTemplateId&&activeTemplateId!=='blank-studio'&&<div className="active-template-chip">Template · {heritageTemplates.find(t=>t.id===activeTemplateId)?.title||activeTemplateId}</div>}</section>
-      <section className="card">
-        <StudioNav mode={mode} setMode={setMode} showBible={showBible} setShowBible={setShowBible} showResearch={showResearch} setShowResearch={setShowResearch} showVoices={showVoices} setShowVoices={setShowVoices} timelineOpen={timelineOpen} setTimelineOpen={setTimelineOpen} syncTimeline={syncTimeline} showProjects={showProjects} setShowProjects={setShowProjects} showCollaboration={showCollaboration} setShowCollaboration={setShowCollaboration} showBilling={showBilling} setShowBilling={setShowBilling} showProduction={showProduction} setShowProduction={setShowProduction} onOpenTemplates={()=>setShowTemplates(true)} />
-        <TemplatePicker visible={showTemplates} onSelect={applyTemplate} onDismiss={()=>setShowTemplates(false)} />
-        <ProductionPanel visible={showProduction} apiFetch={apiFetch} projectId={projectId} scenes={scenes}/>
-        <RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/><CharacterContinuity apiFetch={apiFetch} characters={characters} scenes={scenes} worldBible={worldBible} rootsFoundation={rootsFoundation} setMessage={setMessage}/><AIFilmmakingPanel visible={showAICopilot} apiFetch={apiFetch} story={story} characters={characters.map(characterPayload)} scenes={scenes} research={research} rootsFoundation={rootsFoundation} era={era} storyType={storyType} profile={profile} setScenes={setScenes} setMessage={setMessage}/>
-        <StudioPanels
-          showProjects={showProjects} showResearch={showResearch} timelineOpen={timelineOpen} showBible={showBible}
-          showCollaboration={showCollaboration} showBilling={showBilling}
-          projectProps={{authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut,projectId,projectName,setProjectName,projects,projectStatus,projectLoading,newProject,saveProject,loadProject,deleteProject,assets,assetStatus,refreshAssets,openAsset,deleteAsset}}
-          researchProps={{research,setResearch,researchStatus,setResearchStatus,setEra,setAfricanProfile,setStoryType}}
-          timelineProps={{timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,format}}
-          bibleProps={{characters,draft,setDraft,characterStatus,setCharacterStatus,addCharacter,removeCharacter,generateCharacterPerformance,uploadMediaToCloud,fileToDataUrl}}
-          collaborationProps={{apiFetch,projectId,authUser,projectName}}
-          billingProps={{apiFetch,authUser}}
-        />
-        <VoicesPanel
-          visible={showVoices}
-          characters={characters} setCharacters={setCharacters}
-          profile={profile}
-          voiceGenerating={voiceGenerating} voiceAudio={voiceAudio} voiceStatus={voiceStatus}
-          generateCharacterVoice={generateCharacterVoice}
-        />
-        <StoryComposer
-          mode={mode} setMode={setMode}
-          story={story} setStory={setStory}
-          africanProfile={africanProfile} setAfricanProfile={setAfricanProfile}
-          era={era} setEra={setEra}
-          storyType={storyType} setStoryType={setStoryType}
-          historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes}
-          profile={profile}
-          loadingPlan={loadingPlan} makeStoryboard={makeStoryboard}
-          camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}
-        />
+  const visibleProjects=projectFolderFilter==='All folders'?projects:projects.filter(p=>(p.folder||'My Films')===projectFolderFilter);
+  const projectFolders=['All folders',...Array.from(new Set(projects.map(p=>p.folder||'My Films'))).sort()];
+  const projectProps={projectFolder, setProjectFolder, projectFolderFilter, setProjectFolderFilter, projectFolders, visibleProjects, authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut,projectId,projectName,setProjectName,projects,projectStatus,projectLoading,newProject,saveProject,loadProject,deleteProject,assets,assetStatus,refreshAssets,openAsset,deleteAsset};
+  const researchProps={research,setResearch,researchStatus,setResearchStatus,setEra,setAfricanProfile,setStoryType};
+  const timelineProps={timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,aiEndCard,setAiEndCard,review,setReview,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,format};
+  const bibleProps={characters,draft,setDraft,characterStatus,setCharacterStatus,addCharacter,removeCharacter,generateCharacterPerformance,uploadMediaToCloud,fileToDataUrl};
+  const collaborationProps={apiFetch,projectId,authUser,projectName};
+
+  function renderQuickStart(){
+    return <section className="quick-start cinematic-panel">
+      <div className="quick-start-copy">
+        <div className="eyebrow">START A FILM</div>
+        <h2>From idea to first scene.</h2>
+        <p>Give your film a name and one simple story idea. Avirzo will carry it into the studio.</p>
+      </div>
+      <div className="quick-start-form">
+        <label><span>Film name</span><input className="text-input" value={projectName === 'My Avirzo Film' ? '' : projectName} onChange={e=>setProjectName(e.target.value)} placeholder="e.g. The Last Drum" /></label>
+        <label><span>Story idea</span><textarea value={story} onChange={e=>setStory(e.target.value)} rows="4" placeholder="A young boy follows his grandfather into the forest before sunrise…" /></label>
+        <div className="quick-start-actions">
+          <button className="generate" type="button" onClick={()=>{ if(!story.trim()) { setMessage('Add a short story idea first.'); return; } if(!projectName.trim()) setProjectName('Untitled Avirzo Film'); setMessage('Film started. Build your first scenes in Studio.'); navigate('studio'); }}>Start making →</button>
+          <button className="ghost-button" type="button" onClick={()=>navigate('projects')}>Open a project</button>
+        </div>
+      </div>
+    </section>;
+  }
+
+  function renderStudio(){
+    return <>
+      <section className="page-heading studio-heading">
+        <div className="eyebrow">STUDIO · v2.8.5</div>
+        <div className="studio-title-row">
+          <div>
+            <h1>Make your film.</h1>
+            <p>One workspace. One step at a time.</p>
+          </div>
+          <button type="button" className="templates-trigger" onClick={()=>setShowTemplates(true)}>✦ Templates</button>
+        </div>
       </section>
-      <Storyboard
-        scenes={scenes}
-        characters={characters}
-        profile={profile}
-        era={era}
-        generating={generating}
-        generateAll={generateAll}
-        generateScene={generateScene}
-        updateScene={updateScene}
-        moveScene={moveScene}
-        characterForScene={characterForScene}
-      />
-      <FilmLookControls
-        style={style} setStyle={setStyle}
-        camera={camera} setCamera={setCamera}
-        duration={duration} setDuration={setDuration}
-        format={format} setFormat={setFormat}
-        profile={profile}
-        era={era}
-        storyType={storyType}
-        characters={characters}
-      />
-      {message&&<div className="status global-status">{message}</div>}{videoUrl&&<section className="card result"><div className="eyebrow">LATEST RENDER</div><video controls playsInline src={videoUrl}/><a className="download" href={videoUrl} target="_blank" rel="noreferrer">Open generated video</a><small>Provider video URLs are temporary; completed project media is archived in your private Storage library when cloud storage is enabled.</small></section>}
-    </main><footer>AVIRZO · AFRICAN ROOTS AI CINEMA · v2.7 · HERITAGE STUDIO</footer>
-  </div>
+      {!projectId && !story.trim() && renderQuickStart()}
+      <section className="studio-shell-card">
+        <div className="tabs studio-nav compact-tabs" role="tablist" aria-label="Studio modes">
+          <button type="button" className={mode==='story'?'active':''} onClick={()=>setMode('story')}>Story</button>
+          <button type="button" className={mode==='shot'?'active':''} onClick={()=>setMode('shot')}>Shot</button>
+          <button type="button" onClick={()=>navigate('heritage')}>Heritage</button>
+          <button type="button" onClick={()=>navigate('voices')}>Voices</button>
+          <button type="button" onClick={()=>navigate('timeline')}>Timeline</button>
+        </div>
+        <TemplatePicker visible={showTemplates} onSelect={applyTemplate} onDismiss={()=>setShowTemplates(false)} />
+        {mode==='story' ? <>
+          <StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/>
+          <StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/>
+        </> : <>
+          <AIFilmmakingPanel visible={showAICopilot} apiFetch={apiFetch} story={story} characters={characters.map(characterPayload)} scenes={scenes} research={research} rootsFoundation={rootsFoundation} era={era} storyType={storyType} profile={profile} setScenes={setScenes} setMessage={setMessage}/>
+          <FilmLookControls style={style} setStyle={setStyle} camera={camera} setCamera={setCamera} duration={duration} setDuration={setDuration} format={format} setFormat={setFormat} profile={profile} era={era} storyType={storyType} characters={characters}/>
+        </>}
+      </section>
+      {message&&<div className="status global-status" role="status" aria-live="polite">{message}</div>}
+    </>;
+  }
+
+  function renderHome(){
+    return <>
+      <section className="home-hero page-heading premium-hero">
+        <div className="hero-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div className="eyebrow">AVIRZO · AFRICAN CINEMA STUDIO</div>
+        <h1>Stories with<br/><em>a soul.</em></h1>
+        <p>Turn African stories, memory and imagination into cinematic films — with the roots kept at the heart of every frame.</p>
+        <div className="hero-actions">
+          <button className="hero-cta" type="button" onClick={()=>navigate('studio')}>Enter the Studio <span>→</span></button>
+          <button className="hero-link" type="button" onClick={()=>navigate('projects')}>View films</button>
+        </div>
+        <div className="hero-signature"><span>HERITAGE-FIRST</span><i></i><span>CREATOR-LED</span><i></i><span>CINEMATIC</span></div>
+      </section>
+      <section className="dashboard-grid dashboard-grid-home premium-dashboard">
+        <button className="dashboard-card dashboard-primary premium-card" onClick={()=>navigate('studio')}><span className="dashboard-icon">✦</span><span className="card-kicker">01 · CREATE</span><strong>Studio</strong><small>Shape the story, then make the scene.</small><span className="card-arrow">↗</span></button>
+        <button className="dashboard-card premium-card" onClick={()=>navigate('projects')}><span className="dashboard-icon">▣</span><span className="card-kicker">02 · BUILD</span><strong>Projects</strong><small>Keep every film, scene and asset together.</small><span className="card-arrow">↗</span></button>
+        <button className="dashboard-card premium-card" onClick={()=>navigate('heritage')}><span className="dashboard-icon">◈</span><span className="card-kicker">03 · ROOT</span><strong>Heritage</strong><small>Protect the culture behind the story.</small><span className="card-arrow">↗</span></button>
+      </section>
+      <section className="dashboard-status-grid compact-status-grid">
+        <div className="card-inset"><span>NOW</span><strong>{projectName || 'No film selected'}</strong><small>{scenes.length} scenes · {characters.length} characters</small></div>
+        <div className="card-inset"><span>STATUS</span><strong>{authUser ? 'Cloud' : 'Local'} · FFmpeg ready</strong><small>{recentJobs.length} recent jobs</small></div>
+      </section>
+    </>;
+  }
+
+  function renderPage(){
+    if(inProjectRoute){
+      if(viewPage==='overview') return <ProjectWorkspace projectId={projectId} projectName={projectName} projectFolder={projectFolder} authUser={authUser} projectStatus={projectStatus} navigate={navigate} routeSection="overview" showOverview />;
+      return <div className="project-section-page">
+        <ProjectWorkspace projectId={projectId} projectName={projectName} projectFolder={projectFolder} authUser={authUser} projectStatus={projectStatus} navigate={navigate} routeSection={viewPage} showOverview={false} />
+        <div className="project-section-content">{renderGlobalPage(viewPage)}</div>
+      </div>;
+    }
+    return renderGlobalPage(viewPage);
+  }
+
+  function renderGlobalPage(pageName){
+    if(pageName==='home') return renderHome();
+    if(pageName==='studio') return renderStudio();
+    if(pageName==='projects') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">PROJECT LIBRARY</div><h1>Your films</h1><p>Your films, folders and workspaces.</p></section><ProjectsPanel {...projectProps} visible />{showProduction && <ProductionPanel visible apiFetch={apiFetch} projectId={projectId} scenes={scenes}/>}</div>;
+    if(pageName==='heritage') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">HERITAGE BIBLE</div><h1>Heritage Bible</h1><p>Keep the world, research and characters together.</p></section><RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><ResearchPanel {...researchProps} visible /><CharacterBible {...bibleProps} visible /><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
+    if(pageName==='story') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">STORY DEVELOPMENT</div><h1>Story</h1><p>Build the story, then send it to Scenes.</p></section><StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
+    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section><Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
+    if(pageName==='voices') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">CHARACTER VOICES</div><h1>Voices</h1><p>Create dialogue and character voices.</p></section><VoicesPanel visible characters={characters} setCharacters={setCharacters} profile={profile} voiceGenerating={voiceGenerating} voiceAudio={voiceAudio} voiceStatus={voiceStatus} generateCharacterVoice={generateCharacterVoice}/></div>;
+    if(pageName==='timeline') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EDITING TIMELINE</div><h1>Timeline</h1><p>Assemble scenes, sound and captions.</p></section><TimelinePanel {...timelineProps} visible /></div>;
+    if(pageName==='assets') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">MEDIA LIBRARY</div><h1>Assets</h1><p>Images, clips and audio for this film.</p></section><AssetsPanel authUser={authUser} projectId={projectId} projectName={projectName} assets={assets} assetStatus={assetStatus} refreshAssets={refreshAssets} openAsset={openAsset} deleteAsset={deleteAsset}/></div>;
+    if(pageName==='exports') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EXPORTS & JOBS</div><h1>Exports</h1><p>Exports and background jobs.</p></section><JobCenter jobs={jobs} recent={recentJobs} busyJobId={cancelingJobId} retryingJobId={retryingJobId} onCancel={cancelActiveJob} onRetry={retryActiveJob}/><TimelinePanel {...timelineProps} visible /></div>;
+    if(pageName==='profile') return <ProfilePanel {...{authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut}} />;
+    if(pageName==='settings') return <SettingsPanel format={format} setFormat={setFormat} style={style} setStyle={setStyle} camera={camera} setCamera={setCamera} duration={duration} setDuration={setDuration} styles={styles} cameras={cameras} formats={formats} durations={durations}/>;
+    return renderHome();
+  }
+
+  return <AppShell page={viewPage} navigate={navigate} authUser={authUser} projectId={projectId} projectName={projectName} inProjectRoute={inProjectRoute} routeProjectId={routeProjectId}>
+    {renderPage()}
+    {videoUrl&&page!=='scenes'&&<section className="bible-panel result"><div className="eyebrow">LATEST RENDER</div><video aria-label="Video preview" controls playsInline src={videoUrl}/><a className="download" href={videoUrl} target="_blank" rel="noreferrer">Open generated video</a><small>Provider video URLs are temporary; completed project media is archived in your private Storage library when cloud storage is enabled.</small></section>}
+  </AppShell>;
 }
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<AppErrorBoundary><App/></AppErrorBoundary>);

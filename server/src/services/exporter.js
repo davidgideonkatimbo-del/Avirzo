@@ -188,7 +188,9 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
       high: ['-c:v','libx264','-preset','medium','-crf','18','-pix_fmt','yuv420p']
     };
     const videoEncode = encodePresets[quality] || encodePresets.standard;
-    const tail = ['-movflags','+faststart'];
+    // Provenance: every export is labeled as containing AI-generated media (not optional, so the label cannot be stripped by a client).
+    const provenance = 'Created with Avirzo. Contains AI-generated video and synthetic voice. Cultural and historical content should be reviewed with community knowledge-holders.';
+    const tail = ['-movflags','+faststart','-metadata',`comment=${provenance}`,'-metadata','encoded_by=Avirzo','-metadata','description=AI-generated media'];
     if (audioFiles.length) {
       filters.push(`${audioLabels}amix=inputs=${audioFiles.length}:duration=longest:dropout_transition=2:normalize=0[aout]`);
       if (burn) filters.push(`[0:v]${buildSubtitleFilter(captionPath, format)}[vout]`);
@@ -207,15 +209,33 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
       await execFileAsync('ffmpeg', args.concat(tail, [finalOutput]));
     }
     await ensureActive();
+    let deliverableOutput = finalOutput;
+    if (payload.aiEndCard === true) {
+      const endCard = path.join(dir, 'avirzo-end-card.mp4');
+      const endCardText = path.join(dir, 'end-card.txt');
+      await fs.writeFile(endCardText, 'Created with Avirzo\nAI-assisted filmmaking', 'utf8');
+      let hasAudio = false;
+      try { const { stdout } = await execFileAsync('ffprobe', ['-v','error','-select_streams','a:0','-show_entries','stream=index','-of','csv=p=0', finalOutput]); hasAudio = Boolean(stdout.trim()); } catch {}
+      const cardArgs = ['-y','-f','lavfi','-i',`color=c=black:s=${outW}x${outH}:d=4:r=24`];
+      if (hasAudio) cardArgs.push('-f','lavfi','-i','anullsrc=r=48000:cl=stereo');
+      cardArgs.push('-vf',`drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile='${escFilterPath(endCardText)}':fontcolor=white:fontsize=${format==='9:16'?34:42}:line_spacing=12:x=(w-text_w)/2:y=(h-text_h)/2`, '-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p');
+      if (hasAudio) cardArgs.push('-c:a','aac','-shortest'); else cardArgs.push('-an');
+      await execFileAsync('ffmpeg', cardArgs.concat([endCard]));
+      const joined = path.join(dir, 'avirzo-film-deliverable.mp4');
+      const concatList = path.join(dir, 'deliverable-concat.txt');
+      await fs.writeFile(concatList, `file '${finalOutput.replace(/'/g,"'\\''")}\nfile '${endCard.replace(/'/g,"'\\''")}\n`);
+      await execFileAsync('ffmpeg', ['-y','-f','concat','-safe','0','-i',concatList,'-c','copy',joined]);
+      deliverableOutput = joined;
+    }
     const finalName = `avirzo-film-${Date.now()}.mp4`;
     let downloadUrl = null;
     let assetId = null;
     if (IS_PRODUCTION) {
       if (!supabaseAdmin) throw new Error('Production exports require Supabase Storage and SUPABASE_SERVICE_ROLE_KEY.');
-      const { size: finalSize } = await fs.stat(finalOutput);
+      const { size: finalSize } = await fs.stat(deliverableOutput);
       if (finalSize > MAX_UPLOAD_BYTES) throw new Error(`Final export is ${Math.round(finalSize / 1048576)} MB, above the ${Math.round(MAX_UPLOAD_BYTES / 1048576)} MB archive limit. Try fewer scenes or a shorter film.`);
       // File-backed Blob (Node 19.8+) avoids holding the whole film in memory; fall back to a buffer on older runtimes.
-      const bytes = typeof nodeFs.openAsBlob === 'function' ? await nodeFs.openAsBlob(finalOutput, { type: 'video/mp4' }) : await fs.readFile(finalOutput);
+      const bytes = typeof nodeFs.openAsBlob === 'function' ? await nodeFs.openAsBlob(deliverableOutput, { type: 'video/mp4' }) : await fs.readFile(deliverableOutput);
       const projectId = String(payload.projectId || 'unassigned').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,120) || 'unassigned';
       const storagePath = `${user.id}/${projectId}/export/${Date.now()}-${finalName}`;
       const { error: uploadError } = await supabaseAdmin.storage.from('avirzo-media').upload(storagePath, bytes, { contentType: 'video/mp4', upsert: false });
@@ -229,7 +249,7 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
     } else {
       const publicDir = path.join(process.cwd(), 'exports');
       await fs.mkdir(publicDir, { recursive: true });
-      await fs.copyFile(finalOutput, path.join(publicDir, finalName));
+      await fs.copyFile(deliverableOutput, path.join(publicDir, finalName));
       downloadUrl = `/exports/${finalName}`;
     }
     await ensureActive();
@@ -243,7 +263,7 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
       scenes: scenes.length,
       audioTracks: safeTracks.length,
       captions: safeCaptions.length,
-      ducking: !!duckGain && safeTracks.some(t => t.type === 'music' || t.type === 'ambience'),
+      aiDisclosure: true, aiEndCard: payload.aiEndCard === true, ducking: !!duckGain && safeTracks.some(t => t.type === 'music' || t.type === 'ambience'),
       format,
       quality,
       captionMode: resolvedCaptionMode,

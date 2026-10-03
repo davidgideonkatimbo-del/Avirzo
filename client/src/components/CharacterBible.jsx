@@ -126,20 +126,20 @@ export function CharacterBible({
 
       <div className="character-form">
         {FIELD_ROWS.map(([key, label]) => (
-          <input
+          <input aria-label={label}
             key={key}
             value={draft[key]}
             onChange={e => setDraft({ ...draft, [key]: e.target.value })}
             placeholder={label}
           />
         ))}
-        <input value={draft.voiceId} onChange={e => setDraft({ ...draft, voiceId: e.target.value })} placeholder="Voice ID (optional)" />
-        <input value={draft.possessions} onChange={e => setDraft({ ...draft, possessions: e.target.value })} placeholder="Continuity possessions — tools, jewelry, heirlooms, weapons, bags…" />
-        <input value={draft.emotionalBaseline} onChange={e => setDraft({ ...draft, emotionalBaseline: e.target.value })} placeholder="Emotional baseline — temperament, restraint, energy…" />
-        <input value={draft.ageProgression} onChange={e => setDraft({ ...draft, ageProgression: e.target.value })} placeholder="Age / appearance progression — deliberate changes only" />
-        <textarea value={draft.deliberateChanges} onChange={e => setDraft({ ...draft, deliberateChanges: e.target.value })} placeholder="Deliberate continuity changes — record when clothing, hair, possessions, injury or appearance intentionally changes." />
-        <input value={draft.voiceNotes} onChange={e => setDraft({ ...draft, voiceNotes: e.target.value })} placeholder="Voice notes — age, pace, warmth, authority, emotion…" />
-        <input value={draft.referenceImageUrl} onChange={e => setDraft({ ...draft, referenceImageUrl: e.target.value })} placeholder="Reference image URL (optional; saved as project metadata)" />
+        <input aria-label="Voice ID (optional)" value={draft.voiceId} onChange={e => setDraft({ ...draft, voiceId: e.target.value })} placeholder="Voice ID (optional)" />
+        <input aria-label="Continuity possessions — tools, jewelry, heirlooms, weapons, bags…" value={draft.possessions} onChange={e => setDraft({ ...draft, possessions: e.target.value })} placeholder="Continuity possessions — tools, jewelry, heirlooms, weapons, bags…" />
+        <input aria-label="Emotional baseline — temperament, restraint, energy…" value={draft.emotionalBaseline} onChange={e => setDraft({ ...draft, emotionalBaseline: e.target.value })} placeholder="Emotional baseline — temperament, restraint, energy…" />
+        <input aria-label="Age / appearance progression — deliberate changes only" value={draft.ageProgression} onChange={e => setDraft({ ...draft, ageProgression: e.target.value })} placeholder="Age / appearance progression — deliberate changes only" />
+        <textarea aria-label="Deliberate continuity changes — record when clothing, hair, possessions, injury or appearance intentionally changes." value={draft.deliberateChanges} onChange={e => setDraft({ ...draft, deliberateChanges: e.target.value })} placeholder="Deliberate continuity changes — record when clothing, hair, possessions, injury or appearance intentionally changes." />
+        <input aria-label="Voice notes — age, pace, warmth, authority, emotion…" value={draft.voiceNotes} onChange={e => setDraft({ ...draft, voiceNotes: e.target.value })} placeholder="Voice notes — age, pace, warmth, authority, emotion…" />
+        <input aria-label="Reference image URL (optional; saved as project metadata)" value={draft.referenceImageUrl} onChange={e => setDraft({ ...draft, referenceImageUrl: e.target.value })} placeholder="Reference image URL (optional; saved as project metadata)" />
         <label className="reference-upload">
           Upload reference image
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onReferenceImage} />
@@ -148,7 +148,7 @@ export function CharacterBible({
           Upload performance reference video
           <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={onPerformanceVideo} />
         </label>
-        <input
+        <input aria-label="Performance video URL (optional HTTPS)"
           value={draft.performanceVideoUrl}
           onChange={e => setDraft({ ...draft, performanceVideoUrl: e.target.value })}
           placeholder="Performance video URL (optional HTTPS)"
@@ -158,7 +158,7 @@ export function CharacterBible({
           Avirzo uses Runway Act-Two to transfer facial expression and, when enabled, body movement to the selected character image.
           Generated dialogue audio remains a separate timeline track.
         </div>
-        <textarea
+        <textarea aria-label="Heritage notes: mannerisms, possessions, beliefs, important visual details…"
           value={draft.notes}
           onChange={e => setDraft({ ...draft, notes: e.target.value })}
           placeholder="Heritage notes: mannerisms, possessions, beliefs, important visual details…"

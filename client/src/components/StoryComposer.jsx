@@ -16,7 +16,7 @@ export function StoryComposer({
     return (
       <>
         <label className="label">Tell Avirzo your story</label>
-        <textarea
+        <textarea aria-label="Describe the story from beginning to end…"
           value={story}
           onChange={e => setStory(e.target.value)}
           rows="6"
@@ -28,7 +28,7 @@ export function StoryComposer({
             <strong>{profile?.market} · {profile?.language}</strong>
             <p>Language and cultural context stay attached to the project.</p>
           </div>
-          <select value={africanProfile} onChange={e => setAfricanProfile(e.target.value)}>
+          <select aria-label="Cultural and language profile" value={africanProfile} onChange={e => setAfricanProfile(e.target.value)}>
             {africanProfiles.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
         </div>
@@ -51,7 +51,7 @@ export function StoryComposer({
         <label className="label compact">
           Historical / cultural notes <span className="optional">optional</span>
         </label>
-        <input
+        <input aria-label="e.g. Buganda, late 1800s; specify clothing, architecture, tools, social setting…"
           className="text-input"
           value={historicalNotes}
           onChange={e => setHistoricalNotes(e.target.value)}
@@ -71,7 +71,7 @@ export function StoryComposer({
   return (
     <>
       <label className="label">Describe one cinematic shot</label>
-      <textarea
+      <textarea aria-label="Describe the scene…"
         value={story}
         onChange={e => setStory(e.target.value)}
         rows="5"

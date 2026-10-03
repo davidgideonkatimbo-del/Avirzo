@@ -7,7 +7,8 @@ export function registerRoutes(app, ctx) {
   async function ensureMember(user, projectId) {
     if (!supabaseAdmin || !user) return null;
     const email = String(user.email || '').toLowerCase();
-    if (email) {
+    // An invite is only honored for an address the user has actually confirmed, so nobody can claim it by signing up with someone else's email.
+    if (email && (user.email_confirmed_at || user.confirmed_at)) {
       const { data: invites } = await supabaseAdmin.from('avirzo_project_invites').select('id,role').eq('project_id', projectId).eq('email', email).eq('status','pending');
       for (const invite of invites || []) {
         await supabaseAdmin.from('avirzo_project_members').upsert({ project_id: projectId, user_id: user.id, role: invite.role }, { onConflict: 'project_id,user_id' });
@@ -50,10 +51,10 @@ export function registerRoutes(app, ctx) {
       const role = String(req.body?.role || 'editor');
       if (!email || !email.includes('@')) return res.status(400).json({message:'A valid collaborator email is required.'});
       if (!roles.has(role) || role === 'owner') return res.status(400).json({message:'Choose editor, commenter or viewer.'});
-      const {data,error} = await supabaseAdmin.from('avirzo_project_invites').upsert({ project_id:req.params.id, email, role, status:'pending', token:crypto.randomBytes(18).toString('hex') }, {onConflict:'project_id,email'}).select('token,role,email').single();
+      const {data,error} = await supabaseAdmin.from('avirzo_project_invites').upsert({ project_id:req.params.id, email, role, status:'pending', token:crypto.randomBytes(18).toString('hex') }, {onConflict:'project_id,email'}).select('role,email').single();
       if(error) throw error;
       const base = String(process.env.AVIRZO_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/,'');
-      return res.status(201).json({invite:data,shareLink:base ? `${base}/?invite=${data.token}` : `Invite token: ${data.token}`});
+      return res.status(201).json({invite:data,shareLink:base || '',message:'Invitation saved. The person gets access when they sign in with this email address.'});
     } catch(e) { return res.status(500).json({message:e.message || 'Could not create invitation.'}); }
   });
 

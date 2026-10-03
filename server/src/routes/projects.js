@@ -10,7 +10,7 @@ export function registerRoutes(app, ctx) {
     return member?.role || null;
   }
   async function claimInvites(user) {
-    if (!supabaseAdmin || !user?.email) return;
+    if (!supabaseAdmin || !user?.email || !(user.email_confirmed_at || user.confirmed_at)) return;
     const {data:invites} = await supabaseAdmin.from('avirzo_project_invites').select('id,project_id,role').eq('email',String(user.email).toLowerCase()).eq('status','pending');
     for (const invite of invites || []) {
       await supabaseAdmin.from('avirzo_project_members').upsert({project_id:invite.project_id,user_id:user.id,role:invite.role},{onConflict:'project_id,user_id'});
@@ -20,8 +20,8 @@ export function registerRoutes(app, ctx) {
 
   app.get('/api/projects', async (req,res)=>{
   try{
-    if(supabase){ const user=await requireCloudUser(req,res); if(!user)return; await claimInvites(user); const {data:memberRows}=await supabaseAdmin.from('avirzo_project_members').select('project_id').eq('user_id',user.id); const ids=(memberRows||[]).map(x=>x.project_id); let q=userDb(req).from('avirzo_projects').select('id,name,created_at,updated_at,payload').order('updated_at',{ascending:false}); q=ids.length?q.or(`user_id.eq.${user.id},id.in.(${ids.join(',')})`):q.eq('user_id',user.id); const {data,error}=await q; if(error)throw error; return res.json({projects:(data||[]).map(p=>({id:p.id,name:p.name,createdAt:p.created_at,updatedAt:p.updated_at,sceneCount:Array.isArray(p.payload?.scenes)?p.payload.scenes.length:0,characterCount:Array.isArray(p.payload?.characters)?p.payload.characters.length:0}))}); }
-    const fs=await projectStore(); const names=await fs.readdir(PROJECT_DIR); const projects=[]; for(const n of names.filter(x=>x.endsWith('.json'))){try{const p=JSON.parse(await fs.readFile(path.join(PROJECT_DIR,n),'utf8')); projects.push({id:p.id,name:p.name,createdAt:p.createdAt,updatedAt:p.updatedAt,sceneCount:Array.isArray(p.scenes)?p.scenes.length:0,characterCount:Array.isArray(p.characters)?p.characters.length:0});}catch{}} projects.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))); res.json({projects});
+    if(supabase){ const user=await requireCloudUser(req,res); if(!user)return; await claimInvites(user); const {data:memberRows}=await supabaseAdmin.from('avirzo_project_members').select('project_id').eq('user_id',user.id); const ids=(memberRows||[]).map(x=>x.project_id); let q=userDb(req).from('avirzo_projects').select('id,name,created_at,updated_at,payload').order('updated_at',{ascending:false}); q=ids.length?q.or(`user_id.eq.${user.id},id.in.(${ids.join(',')})`):q.eq('user_id',user.id); const {data,error}=await q; if(error)throw error; return res.json({projects:(data||[]).map(p=>({id:p.id,name:p.name,createdAt:p.created_at,updatedAt:p.updated_at,folder:p.payload?.folder||'My Films',sceneCount:Array.isArray(p.payload?.scenes)?p.payload.scenes.length:0,characterCount:Array.isArray(p.payload?.characters)?p.payload.characters.length:0}))}); }
+    const fs=await projectStore(); const names=await fs.readdir(PROJECT_DIR); const projects=[]; for(const n of names.filter(x=>x.endsWith('.json'))){try{const p=JSON.parse(await fs.readFile(path.join(PROJECT_DIR,n),'utf8')); projects.push({id:p.id,name:p.name,createdAt:p.createdAt,updatedAt:p.updatedAt,folder:p.folder||'My Films',sceneCount:Array.isArray(p.scenes)?p.scenes.length:0,characterCount:Array.isArray(p.characters)?p.characters.length:0});}catch{}} projects.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))); res.json({projects});
   }catch(e){res.status(500).json({message:'Could not read project library.'});}
 });
 

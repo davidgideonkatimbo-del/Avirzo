@@ -1,9 +1,8 @@
+import { sceneContinuityGuard } from '../services/continuity.js';
 export function registerRoutes(app, ctx) {
   const { IS_PRODUCTION, APP_VERSION, supabase, supabaseAdmin, africanProfiles, voiceLanguageSupport, ELEVEN_MODEL, RUNWAY_API, eras, storyTypes, styles, cameras, formats, durations, requireProviderUser, requireProviderAuth, requireRunwayKey, requireVoiceKey, runwayHeaders, normalizeCharacter, characterContinuityLine, buildCinematicPrompt, persistRemoteAsset, archiveProviderOutput, requireAssetCloud, requireOwnedProject, projectStore, safeProjectId, normalizeProject, requireCloudUser, PROJECT_DIR, toSrtTime, acquireExportSlot, ELEVENLABS_API, generationJobs, rateBuckets, jobs } = ctx;
 
   app.post('/api/generate', async (req, res) => {
-  const providerUser = await requireProviderUser(req, res, 'generation');
-  if (!providerUser) return;
   const { prompt, style = 'Cinematic', camera = 'Slow dolly', duration = '5 sec', format = '16:9', sceneNumber = 1, africanProfile = 'uganda-en', era = 'pre1994', storyType = 'inspired', historicalNotes = '', researchBrief = null, characters = [], referenceImage = '', referenceCharacter = null, worldBible = null, continuityContext = '', primaryCharacterId = '' } = req.body || {};
   const profile = africanProfiles[africanProfile];
   if (!prompt?.trim()) return res.status(400).json({ message: 'A prompt is required.' });
@@ -11,6 +10,17 @@ export function registerRoutes(app, ctx) {
   if (!eras[era] || !storyTypes[storyType]) return res.status(400).json({ message: 'Unsupported heritage setting.' });
   if (!styles.has(style) || !cameras.has(camera) || !formats.has(format) || !durations.has(duration)) return res.status(400).json({ message: 'One or more generation settings are not supported.' });
   if (!requireRunwayKey(res)) return;
+  if (String(prompt).length > 3000 || String(historicalNotes || '').length > 6000 || !Array.isArray(characters) || characters.length > 40) return res.status(400).json({ message: 'The scene text, notes or character list is too large.' });
+  // Server-side continuity guard: the same preflight the UI runs, enforced here so it cannot be bypassed.
+  // It runs BEFORE usage is consumed, so a blocked scene never costs the filmmaker quota.
+  const guard = sceneContinuityGuard({
+    scene: { number: sceneNumber, prompt, primaryCharacterId },
+    characters: characters.filter(c => c && typeof c === 'object'), worldBible: (worldBible && typeof worldBible === 'object') ? worldBible : {}, rootsFoundation: req.body?.rootsFoundation || { period: researchBrief?.period || '' }, era
+  });
+  if (!guard.ready) return res.status(422).json({ error: 'CONTINUITY_BLOCKED', message: `Scene ${sceneNumber} was not sent to the video provider: ${guard.blockers.join(' ')}`, blockers: guard.blockers });
+  const serverContinuity = guard.continuityContext;
+  const providerUser = await requireProviderUser(req, res, 'generation');
+  if (!providerUser) return;
   const seconds = Number.parseInt(duration, 10);
   const ratio = format === '9:16' ? '720:1280' : '1280:720';
   const ref = String(referenceImage || '').trim();
@@ -20,7 +30,7 @@ export function registerRoutes(app, ctx) {
     const projectId = req.body?.projectId || null;
     if (projectId && !(await requireOwnedProject(providerUser.id, projectId))) return res.status(404).json({ message: 'Project not found.' });
     job = await jobs.create({ userId: providerUser.id, projectId, type: 'video_generation', status: 'queued' });
-    const promptText = buildCinematicPrompt({ prompt, style, camera, sceneNumber, africanProfile: profile, era, storyType, historicalNotes, characters, researchBrief, referenceCharacter, continuityContext, worldBible });
+    const promptText = buildCinematicPrompt({ prompt, style, camera, sceneNumber, africanProfile: profile, era, storyType, historicalNotes, characters, researchBrief, referenceCharacter, continuityContext: serverContinuity, worldBible });
     const endpoint = ref ? 'image_to_video' : 'text_to_video';
     const response = await fetch(`${RUNWAY_API}/${endpoint}`, { method: 'POST', headers: runwayHeaders(), body: JSON.stringify({ model: 'gen4.5', promptText, ...(ref ? { promptImage: ref } : {}), ratio, duration: seconds }) });
     const data = await response.json().catch(() => ({}));

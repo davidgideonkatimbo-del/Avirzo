@@ -1,8 +1,16 @@
-# Avirzo v2.1 — Background Worker & Production Job System
+# Avirzo — African Cinema Studio
 
 Avirzo is an AI filmmaking studio focused on African heritage, history, oral tradition, languages and culturally grounded visual storytelling.
 
-**Current release: v2.2.0 — Heritage Studio** (guided templates + modular premium UI on the v2.1 production job system).
+**Current release: v2.8.5 — Billing Portal & Export Provenance** (premium cinematic studio on the durable production job system).
+
+## Current production procedure
+- Keep the web service as the first deployment target.
+- Keep the dedicated `avirzo-worker` disabled until we explicitly approve its paid Render plan.
+- Generate and commit `package-lock.json` on a networked machine before the final production build.
+- Run `npm ci` and `npm run build` before replacing the live web deployment.
+- Test the first-film and first-scene flow on Android before adding another major feature.
+- Preserve Avirzo's heritage-first African filmmaking identity and the existing project/studio workflow.
 
 ## What's new
 

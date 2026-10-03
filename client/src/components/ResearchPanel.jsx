@@ -35,7 +35,7 @@ export function ResearchPanel({
       </div>
       <div className="research-grid">
         {[['location', 'Location / community'], ['period', 'Date / historical period'], ['focus', 'Research focus']].map(([key, label]) => (
-          <input
+          <input aria-label={label}
             key={key}
             value={research[key]}
             onChange={e => setResearch({ ...research, [key]: e.target.value })}
@@ -44,28 +44,28 @@ export function ResearchPanel({
         ))}
       </div>
       <label className="label compact">Documented / verified facts</label>
-      <textarea
+      <textarea aria-label="Facts supported by credible sources…"
         value={research.verifiedFacts}
         onChange={e => setResearch({ ...research, verifiedFacts: e.target.value })}
         rows="4"
         placeholder="Facts supported by credible sources…"
       />
       <label className="label compact">Material culture & visual evidence</label>
-      <textarea
+      <textarea aria-label="Architecture, clothing, tools, foodways, transport, landscape…"
         value={research.materialCulture}
         onChange={e => setResearch({ ...research, materialCulture: e.target.value })}
         rows="3"
         placeholder="Architecture, clothing, tools, foodways, transport, landscape…"
       />
       <label className="label compact">Oral traditions / community memory</label>
-      <textarea
+      <textarea aria-label="Traditions, legends or memories — clearly labelled as such…"
         value={research.oralTraditions}
         onChange={e => setResearch({ ...research, oralTraditions: e.target.value })}
         rows="3"
         placeholder="Traditions, legends or memories — clearly labelled as such…"
       />
       <label className="label compact">Uncertainties / needs verification</label>
-      <textarea
+      <textarea aria-label="Details Avirzo must not present as established fact…"
         value={research.uncertainties}
         onChange={e => setResearch({ ...research, uncertainties: e.target.value })}
         rows="3"

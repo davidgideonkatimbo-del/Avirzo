@@ -33,11 +33,11 @@ export function Storyboard({
           <article className="scene" key={scene.id}>
             <div className="scene-number">{String(scene.number).padStart(2, '0')}</div>
             <div className="scene-body">
-              <input
+              <input aria-label={`Scene ${scene.number} title`}
                 value={scene.title}
                 onChange={e => updateScene(scene.id, 'title', e.target.value)}
               />
-              <textarea
+              <textarea aria-label={`Scene ${scene.number} description`}
                 value={scene.prompt}
                 onChange={e => updateScene(scene.id, 'prompt', e.target.value)}
                 rows="3"
@@ -48,14 +48,14 @@ export function Storyboard({
                 {hasImage ? 'image lock selected' : 'text continuity only'}
               </div>
               <div className="scene-actions">
-                <select
+                <select aria-label={`Scene ${scene.number} camera movement`}
                   value={scene.camera}
                   onChange={e => updateScene(scene.id, 'camera', e.target.value)}
                 >
                   {cameras.map(x => <option key={x}>{x}</option>)}
                 </select>
                 {characters.length > 0 && (
-                  <select
+                  <select aria-label={`Scene ${scene.number} main character`}
                     value={scene.primaryCharacterId || ''}
                     onChange={e => updateScene(scene.id, 'primaryCharacterId', e.target.value)}
                   >
@@ -71,10 +71,10 @@ export function Storyboard({
                 <button type="button" onClick={() => generateScene(scene)} disabled={generating}>
                   {scene.status === 'ready' ? 'Regenerate' : 'Generate shot'}
                 </button>
-                <button type="button" onClick={() => moveScene(scene.id, -1)} disabled={scene.number === 1}>↑</button>
-                <button type="button" onClick={() => moveScene(scene.id, 1)} disabled={scene.number === scenes.length}>↓</button>
+                <button type="button" onClick={() => moveScene(scene.id, -1)} disabled={scene.number === 1} aria-label={`Move scene ${scene.number} earlier`}><span aria-hidden="true">↑</span></button>
+                <button type="button" onClick={() => moveScene(scene.id, 1)} disabled={scene.number === scenes.length} aria-label={`Move scene ${scene.number} later`}><span aria-hidden="true">↓</span></button>
               </div>
-              {scene.videoUrl && <video controls playsInline src={scene.videoUrl} />}
+              {scene.videoUrl && <video aria-label={`Scene ${scene.number} video preview`} controls playsInline src={scene.videoUrl} />}
             </div>
           </article>
         );

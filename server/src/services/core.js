@@ -8,7 +8,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 export const HOST = process.env.HOST || '0.0.0.0';
 export const RUNWAY_API = 'https://api.dev.runwayml.com/v1';
 export const RUNWAY_VERSION = '2024-11-06';
-export const APP_VERSION = '2.8.2';
+export const APP_VERSION = '2.8.5';
 export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -108,6 +108,21 @@ export const RATE_LIMITS = {
   export: { windowMs: 60 * 60 * 1000, max: 5 },
   performance: { windowMs: 60 * 60 * 1000, max: 10 }
 };
+// Hourly quota multipliers per plan (product decision: adjust here). Applied to the base RATE_LIMITS.
+export const PLAN_LIMIT_MULTIPLIER = { free: 1, creator: 3, studio: 10 };
+const planCache = new Map();
+export async function getUserPlan(userId) {
+  if (!supabaseAdmin || !userId || userId === 'development-user') return 'free';
+  const hit = planCache.get(userId);
+  if (hit && Date.now() - hit.at < 60000) return hit.plan;
+  try {
+    const { data } = await supabaseAdmin.from('avirzo_billing_accounts').select('plan,status').eq('user_id', userId).maybeSingle();
+    const plan = data && ['active', 'trialing', 'past_due'].includes(data.status) && PLAN_LIMIT_MULTIPLIER[data.plan] ? data.plan : 'free';
+    planCache.set(userId, { plan, at: Date.now() });
+    return plan;
+  } catch { return 'free'; } // if the plan cannot be read, fall back to the safest (free) limits
+}
+export function scaledLimit(limit, plan) { return { ...limit, max: Math.max(1, Math.round(limit.max * (PLAN_LIMIT_MULTIPLIER[plan] || 1))) }; }
 export function rateLimit(key, limit) {
   const now = Date.now();
   const bucket = rateBuckets.get(key);
@@ -143,8 +158,9 @@ export async function durableUsageLimit(userId, kind, limit) {
     res.status(401).json({ error: 'AUTH_REQUIRED', message: 'Sign in before using this provider-backed feature.' });
     return null;
   }
-  const limit = RATE_LIMITS[kind];
-  if (limit) {
+  const baseLimit = RATE_LIMITS[kind];
+  if (baseLimit) {
+    const limit = scaledLimit(baseLimit, await getUserPlan(user.id));
     const result = await durableUsageLimit(user.id, kind, limit);
     if (result.infrastructureError) {
       res.status(503).json({ error: 'USAGE_LIMIT_UNAVAILABLE', message: 'Usage protection is temporarily unavailable. Please try again shortly.' });
@@ -286,7 +302,7 @@ export async function archiveProviderOutput({job, sourceUrl, kind='video', name,
 export const PROJECT_DIR = path.resolve('projects');
  export async function projectStore(){ const fs = await import('node:fs/promises'); await fs.mkdir(PROJECT_DIR,{recursive:true}); return fs; }
 export function safeProjectId(id){ return String(id||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,120); }
-export function normalizeProject(body={}, existing={}){ const now=new Date().toISOString(); return { id: existing.id || `project-${Date.now()}-${Math.random().toString(36).slice(2,8)}`, name:String(body.name||existing.name||'Untitled Avirzo Film').trim().slice(0,120)||'Untitled Avirzo Film', mode:body.mode||'story', story:String(body.story||''), style:String(body.style||'Historical drama'), camera:String(body.camera||'Slow dolly'), duration:String(body.duration||'5 sec'), format:String(body.format||'16:9'), africanProfile:String(body.africanProfile||'uganda-lg'), era:String(body.era||'pre1994'), storyType:String(body.storyType||'oral'), historicalNotes:String(body.historicalNotes||''), rootsFoundation:body.rootsFoundation&&typeof body.rootsFoundation==='object'?body.rootsFoundation:{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}, scenes:Array.isArray(body.scenes)?body.scenes:[], characters:Array.isArray(body.characters)?body.characters:[], research:body.research&&typeof body.research==='object'?body.research:{}, worldBible:body.worldBible&&typeof body.worldBible==='object'?body.worldBible:{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}, timeline:Array.isArray(body.timeline)?body.timeline:[], audioTracks:Array.isArray(body.audioTracks)?body.audioTracks:[], captions:Array.isArray(body.captions)?body.captions:[], duckMusic:body.duckMusic!==false, exportUrl:String(body.exportUrl||''), createdAt:existing.createdAt||now, updatedAt:now }; }
+export function normalizeProject(body={}, existing={}){ const now=new Date().toISOString(); return { id: existing.id || `project-${Date.now()}-${Math.random().toString(36).slice(2,8)}`, name:String(body.name||existing.name||'Untitled Avirzo Film').trim().slice(0,120)||'Untitled Avirzo Film', folder:String(body.folder||existing.folder||'My Films').trim().slice(0,80)||'My Films', mode:body.mode||'story', story:String(body.story||''), style:String(body.style||'Historical drama'), camera:String(body.camera||'Slow dolly'), duration:String(body.duration||'5 sec'), format:String(body.format||'16:9'), africanProfile:String(body.africanProfile||'uganda-lg'), era:String(body.era||'pre1994'), storyType:String(body.storyType||'oral'), historicalNotes:String(body.historicalNotes||''), rootsFoundation:body.rootsFoundation&&typeof body.rootsFoundation==='object'?body.rootsFoundation:{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}, scenes:Array.isArray(body.scenes)?body.scenes:[], characters:Array.isArray(body.characters)?body.characters:[], research:body.research&&typeof body.research==='object'?body.research:{}, worldBible:body.worldBible&&typeof body.worldBible==='object'?body.worldBible:{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}, timeline:Array.isArray(body.timeline)?body.timeline:[], audioTracks:Array.isArray(body.audioTracks)?body.audioTracks:[], captions:Array.isArray(body.captions)?body.captions:[], review:body.review&&typeof body.review==='object'?body.review:{enabled:false,notes:[]}, aiEndCard:body.aiEndCard===true, duckMusic:body.duckMusic!==false, exportUrl:String(body.exportUrl||''), createdAt:existing.createdAt||now, updatedAt:now }; }
  export function userDb(req){
   const header=String(req.headers.authorization||''); const token=header.startsWith('Bearer ')?header.slice(7):'';
   if(!SUPABASE_URL||!SUPABASE_KEY||!token) return null;

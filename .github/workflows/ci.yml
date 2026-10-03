@@ -1,20 +1,73 @@
 name: Avirzo CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: avirzo-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  release-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
-      - run: npm run build
-      - run: node --check server/src/index.js
-      - run: docker build --build-arg VITE_SUPABASE_URL=https://example.supabase.co --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=ci-placeholder -t avirzo:ci .
-      - name: Validate Render deployment configuration
+
+      - name: Detect lockfile
+        id: lockfile
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Generate lockfile when missing
+        if: steps.lockfile.outputs.present == 'false'
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Install exactly from lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Automated release tests
+        run: npm test
+
+      - name: Production client build
+        run: npm run build
+
+      - name: Render certification
         run: npm run validate:render
+
+      - name: Server syntax checks
+        run: |
+          node --check server/src/index.js
+          node --check server/src/app.js
+          node --check server/src/worker.js
+
+      - name: Docker production build
+        run: |
+          docker build \
+            --build-arg VITE_SUPABASE_URL=https://example.supabase.co \
+            --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=ci-placeholder \
+            -t avirzo:ci .
+
+      - name: Commit verified lockfile
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.lockfile.outputs.present == 'false' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: add verified npm lockfile"
+          git push

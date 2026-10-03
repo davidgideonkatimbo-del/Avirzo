@@ -1,3 +1,4 @@
+import { sceneContinuityGuard } from '../services/continuity.js';
 const STOP = new Set(['the','and','that','with','from','this','into','your','have','will','they','their','about','there','were','been','then','when','where','which','while','story','scene']);
 const splitSentences = text => String(text || '').replace(/\s+/g,' ').split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
 const words = text => String(text || '').toLowerCase().match(/[a-zA-ZÀ-ÿ']{3,}/g) || [];
@@ -57,27 +58,6 @@ function characterContinuity({characters=[],scenes=[],worldBible={},rootsFoundat
 }
 
 
-function compactCharacterLine(c){return `${c.name||'Unnamed'} — community ${c.community||'unspecified'}; language ${c.language||'unspecified'}; appearance ${c.appearance||'unspecified'}; clothing ${c.clothing||'unspecified'}; visual identity ${c.visualIdentity||'not defined'}; continuity ${c.continuityNotes||'maintain established identity across scenes'}`;}
-function sceneContinuityGuard({scene={}, characters=[], worldBible={}, rootsFoundation={}, era='pre1994'}){
- const text=String(scene.prompt||scene.description||scene.storyBeat||'').trim();
- const warnings=[]; const blockers=[];
- const primary=characters.find(c=>c.id===scene.primaryCharacterId) || null;
- if(characters.length && !primary) blockers.push(`Scene ${scene.number||'?'} has no primary character assigned.`);
- const period=String(rootsFoundation.period||'').toLowerCase();
- if((era==='pre1994'||/pre[- ]?1994|19th|18th|17th|16th|15th/.test(period)) && /smartphone|iphone|android|wifi|tiktok|instagram|uber|tesla|social media|2020|2021|2022|2023|2024|2025|2026/i.test(text)) blockers.push(`Scene ${scene.number||'?'} contains a possible modern/anachronistic reference for the selected period.`);
- if(primary){
-  if(!String(primary.visualIdentity||'').trim()) warnings.push(`${primary.name||'Primary character'} has no locked visual identity.`);
-  if(!String(primary.clothing||'').trim()) warnings.push(`${primary.name||'Primary character'} has no locked clothing/adornment.`);
-  if(!String(primary.language||'').trim()) warnings.push(`${primary.name||'Primary character'} has no locked language/dialect.`);
-  if(primary.continuityNotes) warnings.push(`Preserve ${primary.name||'the primary character'} continuity: ${String(primary.continuityNotes).slice(0,220)}.`);
- }
- const locks=String(worldBible.continuityLocks||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,8);
- if(locks.length) warnings.push(`World locks: ${locks.join(' | ')}`);
- const characterLine=primary ? compactCharacterLine(primary) : '';
- const context=[characterLine, String(worldBible.visualRules||''), String(worldBible.costumes||''), String(worldBible.languageRules||''), locks.join('; ')].filter(Boolean).join(' | ');
- return {ready:blockers.length===0,blockers,warnings,primaryCharacter:primary?.name||null,continuityContext:context.slice(0,900),principle:'Continuity locks preserve established creative choices; research and community review remain authoritative for cultural and historical accuracy.'};
-}
-
 function worldBibleAudit({worldBible={},characters=[],rootsFoundation={}}){
  const required=['locations','objects','costumes','architecture','culturalPractices','languageRules','visualRules','continuityLocks'];
  const missing=required.filter(k=>!String(worldBible[k]||'').trim());
@@ -92,6 +72,8 @@ function worldBibleAudit({worldBible={},characters=[],rootsFoundation={}}){
 }
 
 export function registerRoutes(app,ctx){
+  // Pure-compute analysis routes: sign-in required in production so they cannot be used anonymously.
+  app.use('/api/ai', async (req,res,next)=>{ try{ const user=await ctx.requireProviderAuth(req,res); if(!user) return; next(); }catch(e){ res.status(500).json({message:'Could not verify your session.'}); } });
   app.post('/api/ai/story-intelligence',(req,res)=>{try{res.json(storyIntelligence(req.body||{}));}catch(e){res.status(500).json({message:e.message||'Story intelligence analysis failed.'});}});
   app.post('/api/ai/film-plan',(req,res)=>{try{const body=req.body||{};if(!String(body.story||'').trim())return res.status(400).json({message:'A story is required.'});res.json(analyze(body));}catch(e){res.status(500).json({message:e.message||'AI film planning failed.'});}});
   app.post('/api/ai/continuity',(req,res)=>{try{res.json(continuity(req.body||{}));}catch(e){res.status(500).json({message:e.message||'Continuity analysis failed.'});}});

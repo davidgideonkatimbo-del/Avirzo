@@ -15,6 +15,15 @@ export function BillingPanel({ visible, apiFetch, authUser }) {
     setLoading(true); setStatus('Preparing secure checkout…');
     try { const r = await apiFetch('/api/billing/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }) }); const d = await r.json(); if (!r.ok) throw new Error(d.message || 'Checkout is not configured yet.'); if (d.url) window.location.href = d.url; else setStatus(d.message || 'Checkout ready.'); } catch (e) { setStatus(e.message); } finally { setLoading(false); }
   }
+  async function manage() {
+    setLoading(true); setStatus('Opening the secure billing portal…');
+    try {
+      const r = await apiFetch('/api/billing/portal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'The billing portal is not available right now.');
+      window.location.href = d.url;
+    } catch (e) { setStatus(e.message || 'The billing portal is not available right now.'); setLoading(false); }
+  }
   if (!visible) return null;
   if (!authUser) return <section className="bible-panel"><div className="heritage-callout">Sign in to view billing and usage.</div></section>;
   const usage = data?.usage || {};
@@ -23,6 +32,7 @@ export function BillingPanel({ visible, apiFetch, authUser }) {
     <div className="usage-grid">{Object.entries(usage).map(([kind, x]) => <div className="card-inset" key={kind}><span className="export-option-label">{kind.replaceAll('_',' ')}</span><strong>{x.used ?? 0}</strong><small>{x.limit == null ? 'Unlimited / provider-limited' : `${x.limit} included · ${Math.max(0, x.limit-(x.used||0))} remaining`}</small><div className="usage-bar"><span style={{ width: `${x.limit ? Math.min(100, ((x.used||0)/x.limit)*100) : 0}%` }} /></div></div>)}</div>
     <div className="plan-grid">{PLANS.map(p => <article className={`plan-card ${data?.plan?.id === p.id ? 'active' : ''}`} key={p.id}><div className="eyebrow">{p.id === 'studio' ? 'TEAM' : 'PLAN'}</div><h3>{p.name}</h3><strong>{p.price}</strong><p>{p.features}</p><button type="button" className={data?.plan?.id === p.id ? '' : 'generate'} onClick={() => choose(p.id)} disabled={loading || data?.plan?.id === p.id}>{data?.plan?.id === p.id ? 'Current plan' : `Choose ${p.name}`}</button></article>)}</div>
     {data?.billing?.status && <div className="heritage-callout">Billing status: <strong>{data.billing.status}</strong>{data.billing.current_period_end ? ` · period ends ${new Date(data.billing.current_period_end).toLocaleDateString()}` : ''}</div>}
-    {status && <div className="heritage-callout">💳 {status}</div>}
+    {data?.billing?.can_manage && <div className="heritage-callout">Change plan, update your card, download invoices or cancel anytime. <button type="button" className="generate" onClick={manage} disabled={loading}>{loading ? 'Opening…' : 'Manage subscription'}</button></div>}
+    {status && <div className="heritage-callout" role="status" aria-live="polite">💳 {status}</div>}
   </section>;
 }

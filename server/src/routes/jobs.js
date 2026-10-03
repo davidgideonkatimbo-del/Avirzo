@@ -1,7 +1,7 @@
 import { createJobService } from '../services/jobs.js';
 
 export function registerJobRoutes(app, ctx) {
-  const { supabaseAdmin, requireCloudUser, requireProviderAuth, RUNWAY_API, runwayHeaders, durableUsageLimit, RATE_LIMITS } = ctx;
+  const { supabaseAdmin, requireCloudUser, requireProviderAuth, RUNWAY_API, runwayHeaders, durableUsageLimit, RATE_LIMITS, getUserPlan, scaledLimit } = ctx;
   const jobs = createJobService({ supabaseAdmin, requireDurable: ctx.IS_PRODUCTION });
   ctx.jobs = jobs;
 
@@ -43,7 +43,7 @@ export function registerJobRoutes(app, ctx) {
     if (job.type !== 'film_export') return res.status(409).json({ message: 'Provider jobs must be regenerated from the relevant production panel.' });
     // A retry re-runs an expensive export, so it counts against the same hourly export quota (checked after validation).
     if (RATE_LIMITS?.export && user.id !== 'development-user') {
-      const usage = await durableUsageLimit(user.id, 'export', RATE_LIMITS.export);
+      const usage = await durableUsageLimit(user.id, 'export', scaledLimit(RATE_LIMITS.export, await getUserPlan(user.id)));
       if (usage.infrastructureError) return res.status(503).json({ error: 'USAGE_LIMIT_UNAVAILABLE', message: 'Usage protection is temporarily unavailable. Please try again shortly.' });
       if (!usage.allowed) { res.set('Retry-After', String(usage.retryAfter)); return res.status(429).json({ error: 'RATE_LIMITED', message: 'Too many export requests. Try again later.', retryAfter: usage.retryAfter }); }
     }

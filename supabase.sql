@@ -329,33 +329,47 @@ as $$
   left join public.avirzo_project_members m on m.project_id = p.id and m.user_id = p_user_id
   where p.id = p_project_id;
 $$;
-revoke all on function public.avirzo_project_role(uuid,uuid) from public, anon;
-grant execute on function public.avirzo_project_role(uuid,uuid) to authenticated, service_role;
+-- The two-argument form accepts any user id, so it must never be callable by browsers (it would reveal who belongs to which project).
+revoke all on function public.avirzo_project_role(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.avirzo_project_role(uuid,uuid) to service_role;
+
+-- Browsers (and RLS policies) use this caller-bound form: it can only ever answer "what is MY role on this project?".
+create or replace function public.avirzo_my_project_role(p_project_id uuid)
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select public.avirzo_project_role(p_project_id, auth.uid());
+$$;
+revoke all on function public.avirzo_my_project_role(uuid) from public, anon;
+grant execute on function public.avirzo_my_project_role(uuid) to authenticated, service_role;
 
 drop policy if exists "avirzo_projects_select_own" on public.avirzo_projects;
 drop policy if exists "avirzo_projects_update_own" on public.avirzo_projects;
 drop policy if exists "avirzo_projects_delete_own" on public.avirzo_projects;
-create policy "avirzo_projects_select_own" on public.avirzo_projects for select to authenticated using (public.avirzo_project_role(id,auth.uid()) <> '');
-create policy "avirzo_projects_update_own" on public.avirzo_projects for update to authenticated using (public.avirzo_project_role(id,auth.uid()) in ('owner','editor')) with check (public.avirzo_project_role(id,auth.uid()) in ('owner','editor'));
-create policy "avirzo_projects_delete_own" on public.avirzo_projects for delete to authenticated using (public.avirzo_project_role(id,auth.uid()) = 'owner');
+create policy "avirzo_projects_select_own" on public.avirzo_projects for select to authenticated using (public.avirzo_my_project_role(id) <> '');
+create policy "avirzo_projects_update_own" on public.avirzo_projects for update to authenticated using (public.avirzo_my_project_role(id) in ('owner','editor')) with check (public.avirzo_my_project_role(id) in ('owner','editor'));
+create policy "avirzo_projects_delete_own" on public.avirzo_projects for delete to authenticated using (public.avirzo_my_project_role(id) = 'owner');
 
 -- Shared project media access follows the same project role model.
 drop policy if exists "avirzo_assets_select_own" on public.avirzo_assets;
 drop policy if exists "avirzo_assets_insert_own" on public.avirzo_assets;
 drop policy if exists "avirzo_assets_delete_own" on public.avirzo_assets;
 create policy "avirzo_assets_select_own" on public.avirzo_assets for select to authenticated using (
-  user_id = auth.uid() or (project_id is not null and public.avirzo_project_role(project_id,auth.uid()) <> '')
+  user_id = auth.uid() or (project_id is not null and public.avirzo_my_project_role(project_id) <> '')
 );
 create policy "avirzo_assets_insert_own" on public.avirzo_assets for insert to authenticated with check (
   user_id = auth.uid() and split_part(storage_path, '/', 1) = auth.uid()::text
 );
 create policy "avirzo_assets_delete_own" on public.avirzo_assets for delete to authenticated using (
-  user_id = auth.uid() or (project_id is not null and public.avirzo_project_role(project_id,auth.uid()) in ('owner','editor'))
+  user_id = auth.uid() or (project_id is not null and public.avirzo_my_project_role(project_id) in ('owner','editor'))
 );
 
 drop policy if exists "avirzo_jobs_select_own" on public.avirzo_jobs;
 create policy "avirzo_jobs_select_own" on public.avirzo_jobs for select to authenticated using (
-  user_id = auth.uid() or (project_id is not null and public.avirzo_project_role(project_id,auth.uid()) <> '')
+  user_id = auth.uid() or (project_id is not null and public.avirzo_my_project_role(project_id) <> '')
 );
 
 -- ---------- premium production workflow: versions, comments, approvals
@@ -371,7 +385,7 @@ create table if not exists public.avirzo_project_versions (
 );
 alter table public.avirzo_project_versions enable row level security;
 drop policy if exists "avirzo_project_versions_access" on public.avirzo_project_versions;
-create policy "avirzo_project_versions_access" on public.avirzo_project_versions for select to authenticated using (public.avirzo_project_role(project_id,auth.uid()) <> '');
+create policy "avirzo_project_versions_access" on public.avirzo_project_versions for select to authenticated using (public.avirzo_my_project_role(project_id) <> '');
 revoke insert, update, delete on public.avirzo_project_versions from anon, authenticated;
 
 create table if not exists public.avirzo_project_comments (
@@ -385,7 +399,7 @@ create table if not exists public.avirzo_project_comments (
 );
 alter table public.avirzo_project_comments enable row level security;
 drop policy if exists "avirzo_project_comments_access" on public.avirzo_project_comments;
-create policy "avirzo_project_comments_access" on public.avirzo_project_comments for select to authenticated using (public.avirzo_project_role(project_id,auth.uid()) <> '');
+create policy "avirzo_project_comments_access" on public.avirzo_project_comments for select to authenticated using (public.avirzo_my_project_role(project_id) <> '');
 revoke insert, update, delete on public.avirzo_project_comments from anon, authenticated;
 
 create table if not exists public.avirzo_scene_approvals (
@@ -398,8 +412,47 @@ create table if not exists public.avirzo_scene_approvals (
 );
 alter table public.avirzo_scene_approvals enable row level security;
 drop policy if exists "avirzo_scene_approvals_access" on public.avirzo_scene_approvals;
-create policy "avirzo_scene_approvals_access" on public.avirzo_scene_approvals for select to authenticated using (public.avirzo_project_role(project_id,auth.uid()) <> '');
+create policy "avirzo_scene_approvals_access" on public.avirzo_scene_approvals for select to authenticated using (public.avirzo_my_project_role(project_id) <> '');
 revoke insert, update, delete on public.avirzo_scene_approvals from anon, authenticated;
 
 create index if not exists avirzo_versions_project_idx on public.avirzo_project_versions(project_id,version_number desc);
 create index if not exists avirzo_comments_project_idx on public.avirzo_project_comments(project_id,created_at);
+
+-- =====================================================================
+-- v2.8.3 security & billing patch (safe to run more than once)
+-- =====================================================================
+
+-- Project ownership can never change (an editor could otherwise update user_id and take the project).
+create or replace function public.avirzo_projects_lock_owner()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.user_id is distinct from old.user_id then
+    raise exception 'Project ownership cannot be changed.' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists avirzo_projects_lock_owner on public.avirzo_projects;
+create trigger avirzo_projects_lock_owner
+before update on public.avirzo_projects
+for each row execute function public.avirzo_projects_lock_owner();
+
+-- Invites are upserted on (project_id, email); PostgREST needs a plain unique index on exactly those columns
+-- (the earlier lower(email) expression index does not match, which made invitations fail).
+create unique index if not exists avirzo_project_invites_project_email_uidx on public.avirzo_project_invites(project_id, email);
+drop index if exists public.avirzo_project_invites_project_email_idx;
+
+-- Billing: ignore stale/out-of-order Stripe events, and remember processed event ids.
+alter table public.avirzo_billing_accounts add column if not exists last_event_created bigint not null default 0;
+create table if not exists public.avirzo_billing_events (
+  event_id text primary key,
+  event_type text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.avirzo_billing_events enable row level security;
+revoke all on public.avirzo_billing_events from anon, authenticated;
+
+notify pgrst, 'reload schema';

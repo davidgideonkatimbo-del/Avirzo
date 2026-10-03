@@ -60,13 +60,13 @@ export function CollaborationPanel({ visible, apiFetch, projectId, authUser, pro
     {!projectId ? <div className="heritage-callout">Save this project first. Collaboration is attached to a cloud project, not the browser session.</div> : <>
       <div className="card-inset">
         <div className="eyebrow">INVITE</div><h3>{projectName || 'Avirzo project'}</h3>
-        <div className="inline-form"><input value={email} onChange={e => setEmail(e.target.value)} placeholder="collaborator@email.com" type="email" /><select value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select><button className="generate" type="button" onClick={invite} disabled={loading}>{loading ? 'Adding…' : 'Invite'}</button></div>
+        <div className="inline-form"><input aria-label="collaborator@email.com" value={email} onChange={e => setEmail(e.target.value)} placeholder="collaborator@email.com" type="email" /><select aria-label="Collaborator role" value={role} onChange={e => setRole(e.target.value)}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select><button className="generate" type="button" onClick={invite} disabled={loading}>{loading ? 'Adding…' : 'Invite'}</button></div>
         <small>Invites are safe to resend. The recipient gets access after signing in with the invited email.</small>
         {shareLink && <div className="heritage-callout"><strong>Share link:</strong> {shareLink}</div>}
       </div>
       <div className="member-list">{members.length ? members.map(m => <div className="member-row" key={m.user_id || m.email}>
         <div><strong>{m.email || m.user_id}</strong><small>{m.status || 'active'}{m.user_id === authUser?.id ? ' · you' : ''}</small></div>
-        {m.role === 'owner' ? <span className="voice-chip">OWNER</span> : <><select value={m.role} onChange={e => changeRole(m.user_id, e.target.value)}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select><button type="button" onClick={() => remove(m.user_id)}>Remove</button></>}
+        {m.role === 'owner' ? <span className="voice-chip">OWNER</span> : <><select aria-label={`Role for ${m.email || m.user_id}`} value={m.role} onChange={e => changeRole(m.user_id, e.target.value)}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select><button type="button" onClick={() => remove(m.user_id)}>Remove</button></>}
       </div>) : <div className="heritage-callout">Only you have access to this project.</div>}</div>
     </>}
     {status && <div className="heritage-callout">🤝 {status}</div>}

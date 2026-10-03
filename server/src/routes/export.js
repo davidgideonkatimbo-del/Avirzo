@@ -18,7 +18,8 @@ export function registerRoutes(app, ctx) {
       format: req.body?.format === '9:16' ? '9:16' : '16:9',
       captionMode: ['burn', 'soft', 'none'].includes(captionModeRaw) ? captionModeRaw : 'burn',
       quality: ['draft', 'standard', 'high'].includes(qualityRaw) ? qualityRaw : 'standard',
-      includeSrt: req.body?.includeSrt !== false
+      includeSrt: req.body?.includeSrt !== false,
+      aiEndCard: req.body?.aiEndCard === true
     };
     if (!payload.scenes.length) return res.status(400).json({ message: 'At least one rendered scene is required.' });
     if (payload.projectId && !(await requireOwnedProject(exportUser.id, payload.projectId))) return res.status(404).json({ message: 'Project not found.' });

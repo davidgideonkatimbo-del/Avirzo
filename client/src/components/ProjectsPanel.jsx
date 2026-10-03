@@ -9,7 +9,7 @@ export function ProjectsPanel({
   authMode, setAuthMode,
   authStatus, authLoading,
   handleAuth, handleSignOut,
-  projectId, projectName, setProjectName,
+  projectId, projectName, setProjectName, projectFolder, setProjectFolder, projectFolderFilter, setProjectFolderFilter, projectFolders, visibleProjects,
   projects, projectStatus, projectLoading,
   newProject, saveProject, loadProject, deleteProject,
   assets, assetStatus, refreshAssets, openAsset, deleteAsset
@@ -36,8 +36,8 @@ export function ProjectsPanel({
           </div>
         ) : !authUser ? (
           <div className="auth-form">
-            <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" />
-            <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" />
+            <input aria-label="Email" type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" />
+            <input aria-label="Password" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" />
             <button className="generate" onClick={handleAuth} disabled={authLoading}>
               {authLoading ? 'Please wait…' : authMode === 'signup' ? 'Create account' : 'Sign in'}
             </button>
@@ -72,8 +72,12 @@ export function ProjectsPanel({
           </div>
         </div>
         <div className="project-save-row">
-          <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Project name" />
+          <input aria-label="Project name" value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Project name" />
           <span>{projectId ? `Project ID: ${projectId}` : 'Not saved yet'}</span>
+        </div>
+        <div className="project-folder-row">
+          <label>Folder <input value={projectFolder} onChange={e => setProjectFolder(e.target.value)} placeholder="My Films" /></label>
+          <label>Show <select value={projectFolderFilter} onChange={e => setProjectFolderFilter(e.target.value)}>{projectFolders.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label>
         </div>
         {projectStatus && <div className="heritage-callout">🗂 {projectStatus}</div>}
 
@@ -112,11 +116,11 @@ export function ProjectsPanel({
         )}
 
         <div className="project-list">
-          {projects.length ? projects.map(p => (
+          {visibleProjects.length ? visibleProjects.map(p => (
             <article className="project-card" key={p.id}>
               <div>
                 <strong>{p.name}</strong>
-                <span>{new Date(p.updatedAt).toLocaleString()} · {p.sceneCount || 0} scenes · {p.characterCount || 0} characters</span>
+                <span>{p.folder || 'My Films'} · {new Date(p.updatedAt).toLocaleString()} · {p.sceneCount || 0} scenes · {p.characterCount || 0} characters</span>
               </div>
               <div>
                 <button type="button" onClick={() => loadProject(p.id)}>Open</button>

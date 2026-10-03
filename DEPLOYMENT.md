@@ -1,4 +1,4 @@
-# Avirzo v2.8.2 Production Deployment
+# Avirzo v2.8.5 Production Deployment
 
 ## Recommended architecture
 
@@ -131,9 +131,21 @@ Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CREATOR_PRICE_ID`, and
 Optional voice providers: `GOOGLE_TTS_API_KEY`, `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`.
 Run the latest `supabase.sql` migration before using Versions, Comments, Scene Approval, or the Heritage Production Passport.
 
-## v2.8.2 Render certification checklist
+## Current staged deployment procedure
 
-1. Apply the latest `supabase.sql` before deploying the v2.8.2 features.
+1. Verify the GitHub root structure before deployment.
+2. Generate and commit the real `package-lock.json` from a networked machine.
+3. Run `npm ci` and `npm run build` successfully.
+4. Deploy/update the **web service only** first.
+5. Keep `avirzo-worker` undeployed until its paid Render cost is explicitly approved.
+6. Open Avirzo on an Android phone and test: Home → Studio → Start a Film → Build storyboard → Scenes.
+7. Only after that phone test passes should we add another major product feature.
+
+The premium billing/provenance changes in v2.8.5 do not change this deployment order.
+
+## v2.8.5 Render certification checklist
+
+1. Apply the latest `supabase.sql` before deploying the v2.8.5 features.
 2. Create/update both Render services from `render.yaml`: `avirzo` web + `avirzo-worker` background worker.
 3. Set the same `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on both services.
 4. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on the web service before the Docker build. Render exposes service environment variables as Docker build arguments, and the Dockerfile consumes these two public values with `ARG`. citeturn0search2
@@ -149,3 +161,14 @@ Do not put provider secrets in `VITE_*` variables or Docker build arguments. Ren
 
 ### Reproducible builds
 A production-grade release should include a real `package-lock.json` generated from a networked environment and then use `npm ci` without the fallback. This package does not fabricate a lockfile because the build environment could not reach the npm registry.
+
+## v2.8.4 notes
+- Run the latest `supabase.sql` BEFORE deploying (owner-lock trigger, caller-bound role function, invite index, billing event tables).
+- Billing: set `STRIPE_WEBHOOK_SECRET`, `STRIPE_CREATOR_PRICE_ID`, `STRIPE_STUDIO_PRICE_ID`; point the Stripe webhook at `/api/billing/webhook` for `checkout.session.completed` and `customer.subscription.created|updated|deleted`.
+- Plan quota multipliers live in `PLAN_LIMIT_MULTIPLIER` (server/src/services/core.js).
+- Optional: `ALLOWED_MEDIA_HOSTS`, `EXPORT_MAX_TOTAL_MB`, `EXPORT_MAX_UPLOAD_MB`, `PROVIDER_JOB_MAX_MINUTES`.
+
+## v2.8.5 billing portal setup
+1. In Stripe: Settings > Billing > Customer portal > turn it on (choose what customers may change: plans, payment method, cancellation).
+2. Set `STRIPE_SECRET_KEY` and `AVIRZO_PUBLIC_URL` (e.g. https://your-app.onrender.com) on the web service.
+3. Subscribers then see "Manage subscription" in the Billing panel; customers with an active subscription cannot start a second checkout.
