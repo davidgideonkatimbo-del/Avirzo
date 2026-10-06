@@ -50,7 +50,9 @@ export const emptyCharacter = {
 
 export const emptyResearch = {
   location: '', period: '', focus: '', verifiedFacts: '',
-  materialCulture: '', oralTraditions: '', uncertainties: '', sources: []
+  materialCulture: '', oralTraditions: '', uncertainties: '', sources: [],
+  evidenceLevel: 'mixed', communityVoice: '', verificationStatus: 'needs-review',
+  creativeLiberties: '', provenanceNote: ''
 };
 
 export const bugandaResearch = {

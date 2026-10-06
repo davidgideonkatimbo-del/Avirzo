@@ -254,9 +254,9 @@ begin
   if new_count > p_limit then
     update public.avirzo_usage_counters set count = count - 1
     where user_id = p_user_id and kind = p_kind and window_start = p_window_start;
-    return query select false, new_count - 1, greatest(1, ceil(extract(epoch from (p_window_start + interval '1 hour' - now())))::integer);
+    return query select false, new_count - 1, greatest(1, ceil(extract(epoch from (p_window_start + case when p_kind = 'generation' then interval '1 year' else interval '1 hour' end - now())))::integer);
   else
-    return query select true, new_count, greatest(1, ceil(extract(epoch from (p_window_start + interval '1 hour' - now())))::integer);
+    return query select true, new_count, greatest(1, ceil(extract(epoch from (p_window_start + case when p_kind = 'generation' then interval '1 year' else interval '1 hour' end - now())))::integer);
   end if;
 end;
 $$;

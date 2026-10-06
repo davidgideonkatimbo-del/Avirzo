@@ -111,7 +111,7 @@ export function TimelinePanel({
           <button type="button" className="mini-btn" onClick={() => { const note=String(review?.draft||'').trim(); if(!note) return; setReview(r => ({...r, notes:[...(r.notes||[]), {id:`review-${Date.now()}`,text:note,createdAt:new Date().toISOString()}],draft:''})); }}>Add review note</button>
           {!!review?.notes?.length && <div className="member-list">{review.notes.map(n => <div className="member-row" key={n.id}><div><strong>Community review</strong><small>{n.text}</small></div></div>)}</div>}
         </div>}
-        <small className="muted">The review stage is optional. It never blocks a solo filmmaker from exporting.</small>
+        <small className="muted">The review stage is optional. When enabled, final export waits for every scene to be approved or locked.</small>
       </div>
 
       <div className="timeline-track caption-track">

@@ -19,6 +19,9 @@ import { registerRoutes as registerAI } from './routes/ai.js';
 
 export function createApp() {
   const app = express();
+  if (core.IS_PRODUCTION && (!core.SUPABASE_URL || !core.SUPABASE_KEY || !core.SUPABASE_SERVICE_ROLE_KEY)) {
+    throw new Error('Production requires SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, and SUPABASE_SERVICE_ROLE_KEY. Local JSON project storage is disabled in production.');
+  }
   const configuredOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean);
   const publicUrl = String(process.env.AVIRZO_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/$/, '');
   const allowedOrigins = [...new Set([...configuredOrigins, ...(publicUrl ? [publicUrl] : [])])];

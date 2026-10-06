@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: AVIRZO_WORKER_ENABLED
+        value: 'false'
       - key: PORT
         value: 10000
       - key: HOST
@@ -62,6 +64,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: AVIRZO_WORKER_ENABLED
+        value: 'false'
       - key: RUNWAYML_API_SECRET
         sync: false
       - key: ELEVENLABS_API_KEY

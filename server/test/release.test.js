@@ -104,3 +104,28 @@ test('navigation organizes existing features without adding new routes', () => {
   assert.match(shell, /const NAV_LOOKUP = \[{ id: 'home', label: 'Home'/);
   assert.match(shell, /NAV_LOOKUP\.find\(x => x\.id === id\)/);
 });
+
+
+test('character and world continuity audit is wired into the protected AI workflow', () => {
+  const service = read('server/src/services/continuity.js');
+  const routes = read('server/src/routes/ai.js');
+  const panel = read('client/src/components/CharacterContinuity.jsx');
+  assert.match(service, /export function characterWorldContinuityAudit/);
+  assert.match(service, /Possible deliberate change detected/);
+  assert.match(service, /worldBible\.continuityLocks/);
+  assert.match(routes, /\/api\/ai\/character-world-continuity/);
+  assert.match(panel, /Character \+ World continuity/);
+});
+
+
+test('community review is a real final-export checkpoint when enabled', () => {
+  const route = read('server/src/routes/export.js');
+  const panel = read('client/src/components/ProductionPanel.jsx');
+  const main = read('client/src/main.jsx');
+  assert.match(route, /COMMUNITY_REVIEW_REQUIRED/);
+  assert.match(route, /review\.enabled === true/);
+  assert.match(route, /approved.*locked/);
+  assert.match(panel, /PRODUCTION CHECKPOINT/);
+  assert.match(panel, /All scenes approved for final export/);
+  assert.match(main, /review};/);
+});

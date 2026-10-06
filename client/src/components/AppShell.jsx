@@ -5,9 +5,6 @@ const NAV_GROUPS = [
     label: 'CREATE',
     items: [
       { id: 'studio', label: 'Studio', icon: '✦' },
-      { id: 'story', label: 'Story', icon: '✎' },
-      { id: 'scenes', label: 'Scenes', icon: '▤' },
-      { id: 'timeline', label: 'Timeline', icon: '▥' },
     ],
   },
   {
@@ -18,13 +15,6 @@ const NAV_GROUPS = [
       { id: 'exports', label: 'Exports & Jobs', icon: '⇩' },
     ],
   },
-  {
-    label: 'AVIRZO',
-    items: [
-      { id: 'heritage', label: 'Heritage', icon: '◈' },
-      { id: 'voices', label: 'Voices', icon: '◉' },
-    ],
-  },
 ];
 
 const NAV = NAV_GROUPS.flatMap(group => group.items);
@@ -32,25 +22,23 @@ const NAV_LOOKUP = [{ id: 'home', label: 'Home', icon: '⌂' }, ...NAV];
 
 const BOTTOM = ['home', 'studio', 'projects', 'heritage', 'more'];
 const MORE_GROUPS = [
-  { label: 'CREATE', items: [
+  { label: 'FILM', items: [
     { id: 'story', label: 'Story', icon: '✎' },
     { id: 'scenes', label: 'Scenes', icon: '▤' },
     { id: 'timeline', label: 'Timeline', icon: '▥' },
-  ]},
-  { label: 'LIBRARY', items: [
-    { id: 'assets', label: 'Assets', icon: '▧' },
-    { id: 'exports', label: 'Exports & Jobs', icon: '⇩' },
+    { id: 'voices', label: 'Voices', icon: '◉' },
   ]},
   { label: 'AVIRZO', items: [
-    { id: 'voices', label: 'Voices', icon: '◉' },
     { id: 'heritage', label: 'Heritage', icon: '◈' },
   ]},
   { label: 'ACCOUNT', items: [
     { id: 'profile', label: 'Profile', icon: '●' },
+    { id: 'billing', label: 'Billing & Usage', icon: '◒' },
     { id: 'settings', label: 'Settings', icon: '⚙' },
   ]},
 ];
 const MORE = MORE_GROUPS.flatMap(group => group.items);
+const PAGE_LOOKUP = [...NAV_LOOKUP, ...MORE.filter(item => !NAV_LOOKUP.some(existing => existing.id === item.id))];
 
 export function AppShell({ page, navigate, authUser, projectId, projectName, inProjectRoute, children }) {
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -123,7 +111,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
             <span className="account-avatar">{authUser?.email?.slice(0, 1)?.toUpperCase() || 'A'}</span>
             <span>{authUser?.email || 'Creator workspace'}</span>
           </div>
-          <small>v2.8.5</small>
+          <small>v2.9.3 · Production Hardening</small>
         </div>
       </aside>
 
@@ -132,7 +120,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
           <div className="mobile-brand">
             <span className="brand-mark">A</span><span>AVIRZO</span>
           </div>
-          <div className="topbar-page-title">{NAV_LOOKUP.find(x => x.id === active)?.label || (page === 'profile' ? 'Profile' : 'Settings')} {inProjectRoute && projectName ? <span className="topbar-project-context">· {projectName}</span> : null}</div>
+          <div className="topbar-page-title">{PAGE_LOOKUP.find(x => x.id === page)?.label || PAGE_LOOKUP.find(x => x.id === active)?.label || 'Avirzo'} {inProjectRoute && projectName ? <span className="topbar-project-context">· {projectName}</span> : null}</div>
           <button className="topbar-profile" type="button" onClick={() => navigate('profile')} aria-label="Open profile">
             {authUser?.email?.slice(0, 1)?.toUpperCase() || 'A'}
           </button>

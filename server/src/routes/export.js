@@ -2,7 +2,7 @@ import { processFilmExport } from '../services/exporter.js';
 import { assertSafeUrl } from '../services/safeFetch.js';
 
 export function registerRoutes(app, ctx) {
-  const { IS_PRODUCTION, requireProviderUser, requireOwnedProject, jobs } = ctx;
+  const { IS_PRODUCTION, requireProviderUser, requireOwnedProject, jobs, supabaseAdmin, WORKER_ENABLED } = ctx;
 
   app.post('/api/export/film', async (req, res) => {
     const exportUser = await requireProviderUser(req, res, 'export');
@@ -23,6 +23,23 @@ export function registerRoutes(app, ctx) {
     };
     if (!payload.scenes.length) return res.status(400).json({ message: 'At least one rendered scene is required.' });
     if (payload.projectId && !(await requireOwnedProject(exportUser.id, payload.projectId))) return res.status(404).json({ message: 'Project not found.' });
+    if (payload.projectId && supabaseAdmin) {
+      const { data: projectRow } = await supabaseAdmin.from('avirzo_projects').select('payload').eq('id', payload.projectId).maybeSingle();
+      const projectPayload = projectRow?.payload || {};
+      const review = projectPayload.review || {};
+      if (review.enabled === true) {
+        const { data: approvalRows } = await supabaseAdmin.from('avirzo_scene_approvals').select('scene_id,status').eq('project_id', payload.projectId);
+        const approved = new Map((approvalRows || []).map(x => [String(x.scene_id), x.status]));
+        const unapproved = payload.scenes.filter(scene => !['approved','locked'].includes(approved.get(String(scene.id))));
+        if (unapproved.length) {
+          return res.status(409).json({
+            message: `Community review is enabled. Approve or lock ${unapproved.length} scene${unapproved.length === 1 ? '' : 's'} before final export.`,
+            code: 'COMMUNITY_REVIEW_REQUIRED',
+            scenes: unapproved.map(s => ({ id: s.id, number: s.number, title: s.title }))
+          });
+        }
+      }
+    }
     if (IS_PRODUCTION && payload.scenes.some(s => !s?.assetId)) return res.status(400).json({ message: 'Every production export scene must reference an archived Avirzo asset.' });
     if (payload.scenes.length > 30) return res.status(413).json({ message: 'Export is limited to 30 scenes per job.' });
     try {
@@ -33,7 +50,7 @@ export function registerRoutes(app, ctx) {
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 15 * 1024 * 1024) return res.status(413).json({ message: 'Export request is too large for the durable worker queue. Upload large audio files to Avirzo private media storage first.' });
 
     const job = await jobs.create({ userId: exportUser.id, projectId: payload.projectId, type: 'film_export', payload });
-    if (IS_PRODUCTION) {
+    if (IS_PRODUCTION && WORKER_ENABLED) {
       return res.status(202).json({ status: 'queued', jobId: job.id, message: 'Your film export has been queued. You can keep working while it renders.' });
     }
 

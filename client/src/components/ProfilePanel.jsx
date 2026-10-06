@@ -36,7 +36,7 @@ export function ProfilePanel({ authUser, authEmail, setAuthEmail, authPassword, 
           <div className="profile-facts">
             <div><span>Focus</span><strong>African roots & cinema</strong></div>
             <div><span>Studio</span><strong>Heritage Studio</strong></div>
-            <div><span>Version</span><strong>2.8.5</strong></div>
+            <div><span>Version</span><strong>2.9.3</strong></div>
           </div>
         </div>
       </section>
