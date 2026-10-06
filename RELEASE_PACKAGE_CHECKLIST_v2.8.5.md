@@ -1,4 +1,4 @@
-# Avirzo v2.8.5 Release Package Checklist
+# Avirzo v2.9.3 Release Package Checklist
 
 This package is intended to be pushed to `main` before production deployment.
 

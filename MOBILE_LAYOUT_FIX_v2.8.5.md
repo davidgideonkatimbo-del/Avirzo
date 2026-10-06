@@ -1,4 +1,4 @@
-# Avirzo v2.8.5 — Mobile Layout Regression Fix
+# Avirzo v2.9.3 — Mobile Layout Regression Fix
 
 ## Fixed
 - Removed the hidden desktop sidebar width reservation on phones.

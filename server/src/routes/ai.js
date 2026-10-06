@@ -1,4 +1,4 @@
-import { sceneContinuityGuard, characterWorldContinuityAudit } from '../services/continuity.js';
+import { sceneContinuityGuard } from '../services/continuity.js';
 const STOP = new Set(['the','and','that','with','from','this','into','your','have','will','they','their','about','there','were','been','then','when','where','which','while','story','scene']);
 const splitSentences = text => String(text || '').replace(/\s+/g,' ').split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
 const words = text => String(text || '').toLowerCase().match(/[a-zA-ZÀ-ÿ']{3,}/g) || [];
@@ -81,5 +81,4 @@ export function registerRoutes(app,ctx){
   app.post('/api/ai/character-continuity',(req,res)=>{try{res.json(characterContinuity(req.body||{}));}catch(e){res.status(500).json({message:e.message||'Character continuity analysis failed.'});}});
   app.post('/api/ai/scene-continuity',(req,res)=>{try{res.json(sceneContinuityGuard(req.body||{}));}catch(e){res.status(500).json({message:e.message||'Scene continuity check failed.'});}});
   app.post('/api/ai/world-bible',(req,res)=>{try{res.json(worldBibleAudit(req.body||{}));}catch(e){res.status(500).json({message:e.message||'World Bible audit failed.'});}});
-  app.post('/api/ai/character-world-continuity',(req,res)=>{try{res.json(characterWorldContinuityAudit(req.body||{}));}catch(e){res.status(500).json({message:e.message||'Character and world continuity audit failed.'});}});
 }

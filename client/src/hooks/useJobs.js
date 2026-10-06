@@ -6,7 +6,6 @@ export function useJobs(apiFetch, enabled, projectId = '') {
   const apiRef = useRef(apiFetch);
   apiRef.current = apiFetch;
   const [jobStatus, setJobStatus] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
 
   const refreshJobs = useCallback(async () => {
     if (!enabled) return;
@@ -24,11 +23,6 @@ export function useJobs(apiFetch, enabled, projectId = '') {
     const timer = setInterval(refreshJobs, 5000);
     return () => clearInterval(timer);
   }, [refreshJobs, enabled]);
-
-  async function refreshNow() {
-    setRefreshing(true);
-    try { await refreshJobs(); } finally { setRefreshing(false); }
-  }
 
   async function retryJob(id) {
     const r = await apiRef.current(`/api/jobs/${encodeURIComponent(id)}/retry`, { method: 'POST' });
@@ -48,5 +42,5 @@ export function useJobs(apiFetch, enabled, projectId = '') {
     return data.job;
   }
 
-  return { jobs, recentJobs, refreshJobs, refreshNow, refreshing, cancelJob, retryJob, jobStatus, setJobStatus };
+  return { jobs, recentJobs, refreshJobs, cancelJob, retryJob, jobStatus, setJobStatus };
 }

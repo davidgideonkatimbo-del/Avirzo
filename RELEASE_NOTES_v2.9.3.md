@@ -1,10 +1,10 @@
-# Avirzo v2.9.3 — Free Generation Quota Policy
+# Avirzo v2.9.3 — Account-Based Annual Generation Quota
 
-## Change
-- Free plan video generation is capped at **20 generations per UTC calendar year**.
-- The durable Supabase usage window starts January 1 and resets January 1 of the following year.
-- When the annual allowance is exhausted, the retry period points to the next UTC calendar year.
-- Voice, export, and performance quotas remain hourly.
-
-## Safety
-The durable Supabase usage counter remains the source of truth in production and continues to fail closed when the usage-protection RPC is unavailable.
+- Free video generation allowance: 20 generations per authenticated Avirzo account per calendar year.
+- The allowance is tied to the Supabase account/user ID, so changing device or browser does not reset it.
+- Annual reset occurs on January 1 UTC.
+- Creator and Studio generation allowances scale from the same annual base.
+- Asset deletion ownership fields fixed.
+- Production refuses to boot without Supabase configuration.
+- Production export runs inline unless `AVIRZO_WORKER_ENABLED=true`; the paid worker remains optional.
+- Supabase usage RPC retry timing updated for annual generation windows.

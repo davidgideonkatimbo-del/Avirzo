@@ -1,4 +1,4 @@
-# Avirzo v2.8.5 Production Deployment
+# Avirzo v2.9.3 Production Deployment
 
 ## Recommended architecture
 
@@ -141,11 +141,11 @@ Run the latest `supabase.sql` migration before using Versions, Comments, Scene A
 6. Open Avirzo on an Android phone and test: Home → Studio → Start a Film → Build storyboard → Scenes.
 7. Only after that phone test passes should we add another major product feature.
 
-The premium billing/provenance changes in v2.8.5 do not change this deployment order.
+The premium billing/provenance changes in v2.9.3 do not change this deployment order.
 
-## v2.8.5 Render certification checklist
+## v2.9.3 Render certification checklist
 
-1. Apply the latest `supabase.sql` before deploying the v2.8.5 features.
+1. Apply the latest `supabase.sql` before deploying the v2.9.3 features.
 2. Create/update both Render services from `render.yaml`: `avirzo` web + `avirzo-worker` background worker.
 3. Set the same `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on both services.
 4. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on the web service before the Docker build. Render exposes service environment variables as Docker build arguments, and the Dockerfile consumes these two public values with `ARG`. citeturn0search2
@@ -168,7 +168,7 @@ A production-grade release should include a real `package-lock.json` generated f
 - Plan quota multipliers live in `PLAN_LIMIT_MULTIPLIER` (server/src/services/core.js).
 - Optional: `ALLOWED_MEDIA_HOSTS`, `EXPORT_MAX_TOTAL_MB`, `EXPORT_MAX_UPLOAD_MB`, `PROVIDER_JOB_MAX_MINUTES`.
 
-## v2.8.5 billing portal setup
+## v2.9.3 billing portal setup
 1. In Stripe: Settings > Billing > Customer portal > turn it on (choose what customers may change: plans, payment method, cancellation).
 2. Set `STRIPE_SECRET_KEY` and `AVIRZO_PUBLIC_URL` (e.g. https://your-app.onrender.com) on the web service.
 3. Subscribers then see "Manage subscription" in the Billing panel; customers with an active subscription cannot start a second checkout.

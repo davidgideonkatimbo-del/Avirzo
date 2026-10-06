@@ -1,4 +1,4 @@
-# Avirzo v2.8.5 — Multi-page Studio structure
+# Avirzo v2.9.3 — Multi-page Studio structure
 
 Avirzo is organized as an application shell rather than a single scrolling studio.
 
@@ -25,8 +25,3 @@ Avirzo is organized as an application shell rather than a single scrolling studi
 Projects remain the durable unit of work. Assets are now presented in a dedicated Assets page and are scoped to the current project. The existing project API/storage model is preserved.
 
 Folder/subfolder persistence is intentionally not invented in this UI pass because it requires a database schema and API contract. It can be added as a separate migration without changing the page architecture.
-
-## v2.9.0 performance boundary
-Heavy project tools are lazy-loaded from `client/src/main.jsx`. Home, navigation and the application shell can render without eagerly downloading Storyboard, Timeline, Heritage, Research, Voices, Assets, Projects and other large panels.
-
-Billing & Usage is exposed through the account More sheet and continues to use the server's durable hourly usage counters as the source of truth.

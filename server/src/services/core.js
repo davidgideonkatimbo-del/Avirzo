@@ -2,7 +2,6 @@ import { safeFetchBuffer } from './safeFetch.js';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit, scaledLimit, PLAN_LIMIT_MULTIPLIER } from './quota.js';
 
 export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -17,7 +16,6 @@ export const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL
 export const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 export const ELEVENLABS_API = 'https://api.elevenlabs.io/v1';
 export const ELEVEN_MODEL = 'eleven_v3';
-export const WORKER_ENABLED = String(process.env.AVIRZO_WORKER_ENABLED || '').toLowerCase() === 'true';
 
 export const styles = new Set(['Cinematic', 'Photorealistic', 'Documentary', 'Fantasy', 'Historical drama']);
 export const cameras = new Set(['Slow dolly', 'Wide tracking', 'Handheld', 'Static', 'Crane reveal', 'Orbit']);
@@ -105,14 +103,15 @@ let exportBusy = false;
   return () => { exportBusy = false; const next = exportWaiters.shift(); if (next) next(); };
 }
 export const RATE_LIMITS = {
-  // Video generation is a paid-provider cost. Free users receive a yearly credit budget,
-  // not a short-window allowance that can be renewed indefinitely.
+  // Video generation is an account-level annual credit budget.
   generation: { windowMs: 365 * 24 * 60 * 60 * 1000, max: 20, window: 'year' },
-  voice: { windowMs: 60 * 60 * 1000, max: 20, window: 'hour' },
-  export: { windowMs: 60 * 60 * 1000, max: 5, window: 'hour' },
-  performance: { windowMs: 60 * 60 * 1000, max: 10, window: 'hour' }
+  voice: { windowMs: 60 * 60 * 1000, max: 20 },
+  export: { windowMs: 60 * 60 * 1000, max: 5 },
+  performance: { windowMs: 60 * 60 * 1000, max: 10 }
 };
-export { rateLimit, scaledLimit, PLAN_LIMIT_MULTIPLIER };
+// Hourly quota multipliers per plan (product decision: adjust here). Applied to the base RATE_LIMITS.
+export const PLAN_LIMIT_MULTIPLIER = { free: 1, creator: 3, studio: 10 };
+export const WORKER_ENABLED = String(process.env.AVIRZO_WORKER_ENABLED || '').toLowerCase() === 'true';
 const planCache = new Map();
 export async function getUserPlan(userId) {
   if (!supabaseAdmin || !userId || userId === 'development-user') return 'free';
@@ -123,26 +122,37 @@ export async function getUserPlan(userId) {
     const plan = data && ['active', 'trialing', 'past_due'].includes(data.status) && PLAN_LIMIT_MULTIPLIER[data.plan] ? data.plan : 'free';
     planCache.set(userId, { plan, at: Date.now() });
     return plan;
-  } catch { return 'free'; }
+  } catch { return 'free'; } // if the plan cannot be read, fall back to the safest (free) limits
 }
+export function scaledLimit(limit, plan) { return { ...limit, max: Math.max(1, Math.round(limit.max * (PLAN_LIMIT_MULTIPLIER[plan] || 1))) }; }
 function usageWindowStart(kind, date = new Date()) {
   const start = new Date(date);
   if (RATE_LIMITS[kind]?.window === 'year') {
-    return new Date(Date.UTC(start.getUTCFullYear(), 0, 1));
+    start.setUTCMonth(0, 1);
+    start.setUTCHours(0, 0, 0, 0);
+    return start;
   }
   start.setUTCMinutes(0, 0, 0);
   return start;
 }
-
 function usageRetryAfter(kind, now = new Date()) {
   if (RATE_LIMITS[kind]?.window === 'year') {
     const next = new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
     return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 1000));
   }
-  const next = new Date(now);
-  next.setUTCMinutes(0, 0, 0);
-  next.setUTCHours(next.getUTCHours() + 1);
+  const next = new Date(now); next.setUTCMinutes(60, 0, 0);
   return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 1000));
+}
+export function rateLimit(key, limit) {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= limit.windowMs) {
+    rateBuckets.set(key, { startedAt: now, count: 1 });
+    return { allowed: true };
+  }
+  if (bucket.count >= limit.max) return { allowed: false, retryAfter: Math.ceil((limit.windowMs - (now - bucket.startedAt)) / 1000) };
+  bucket.count += 1;
+  return { allowed: true };
 }
 
 export async function durableUsageLimit(userId, kind, limit) {

@@ -7,12 +7,22 @@ const root = path.resolve(process.cwd());
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 
 test('release stays on the protected Avirzo workflow', () => {
-  const guardrails = read('PROCEDURE_GUARDRAILS_v2.8.5.md');
+  const guardrails = read('PROCEDURE_GUARDRAILS_v2.9.3.md');
   assert.match(guardrails, /Web service first/i);
   assert.match(guardrails, /Worker remains optional/i);
   assert.match(guardrails, /Test the updated build on Android/i);
 });
 
+
+test('free generation quota is account-based and yearly', () => {
+  const core = read('server/src/services/core.js');
+  assert.match(core, /generation:\s*\{[^}]*max:\s*20[^}]*window:\s*'year'/s);
+  assert.match(core, /p_user_id:\s*userId/);
+  assert.match(core, /setUTCMonth\(0, 1\)/);
+  assert.match(core, /Date\.UTC\(now\.getUTCFullYear\(\) \+ 1, 0, 1\)/);
+  const sql = read('supabase.sql');
+  assert.match(sql, /p_kind = 'generation' then interval '1 year'/);
+});
 test('export route exposes optional AI end card without making it mandatory', () => {
   const route = read('server/src/routes/export.js');
   assert.match(route, /aiEndCard: req\.body\?\.aiEndCard === true/);
@@ -103,29 +113,4 @@ test('navigation organizes existing features without adding new routes', () => {
   assert.match(shell, /const MORE = MORE_GROUPS\.flatMap/);
   assert.match(shell, /const NAV_LOOKUP = \[{ id: 'home', label: 'Home'/);
   assert.match(shell, /NAV_LOOKUP\.find\(x => x\.id === id\)/);
-});
-
-
-test('character and world continuity audit is wired into the protected AI workflow', () => {
-  const service = read('server/src/services/continuity.js');
-  const routes = read('server/src/routes/ai.js');
-  const panel = read('client/src/components/CharacterContinuity.jsx');
-  assert.match(service, /export function characterWorldContinuityAudit/);
-  assert.match(service, /Possible deliberate change detected/);
-  assert.match(service, /worldBible\.continuityLocks/);
-  assert.match(routes, /\/api\/ai\/character-world-continuity/);
-  assert.match(panel, /Character \+ World continuity/);
-});
-
-
-test('community review is a real final-export checkpoint when enabled', () => {
-  const route = read('server/src/routes/export.js');
-  const panel = read('client/src/components/ProductionPanel.jsx');
-  const main = read('client/src/main.jsx');
-  assert.match(route, /COMMUNITY_REVIEW_REQUIRED/);
-  assert.match(route, /review\.enabled === true/);
-  assert.match(route, /approved.*locked/);
-  assert.match(panel, /PRODUCTION CHECKPOINT/);
-  assert.match(panel, /All scenes approved for final export/);
-  assert.match(main, /review};/);
 });

@@ -1,4 +1,4 @@
-# Avirzo v2.8.5 — Billing Portal & Export Provenance
+# Avirzo v2.9.3 — Billing Portal & Export Provenance
 
 ## Added
 - **Manage subscription.** New `POST /api/billing/portal` opens the Stripe customer portal (change plan, update card, invoices, cancel). The Billing panel shows a "Manage subscription" button for accounts that have a Stripe customer. The summary route reports `billing.can_manage`.

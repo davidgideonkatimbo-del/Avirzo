@@ -33,33 +33,6 @@ export function ResearchPanel({
           Load Buganda example
         </button>
       </div>
-      <div className="card-inset heritage-passport">
-        <div className="eyebrow">HERITAGE PASSPORT</div>
-        <h3>Tell Avirzo what is known, remembered, and still needs a voice.</h3>
-        <p className="muted">This layer travels with the project so story development and generation can respect the difference between documented history, oral memory and creative reconstruction.</p>
-        <div className="research-grid">
-          <label className="label compact">Evidence level
-            <select aria-label="Evidence level" value={research.evidenceLevel || 'mixed'} onChange={e => setResearch({ ...research, evidenceLevel: e.target.value })}>
-              <option value="documented">Documented</option>
-              <option value="oral">Oral / community memory</option>
-              <option value="mixed">Mixed</option>
-              <option value="creative">Creative reconstruction</option>
-            </select>
-          </label>
-          <label className="label compact">Verification status
-            <select aria-label="Verification status" value={research.verificationStatus || 'needs-review'} onChange={e => setResearch({ ...research, verificationStatus: e.target.value })}>
-              <option value="verified">Reviewed / verified</option>
-              <option value="community-review">Community review recommended</option>
-              <option value="needs-review">Needs verification</option>
-            </select>
-          </label>
-          <input aria-label="Community voice or source steward" value={research.communityVoice || ''} onChange={e => setResearch({ ...research, communityVoice: e.target.value })} placeholder="Community voice / source steward" />
-          <input aria-label="Provenance note" value={research.provenanceNote || ''} onChange={e => setResearch({ ...research, provenanceNote: e.target.value })} placeholder="Where this knowledge came from" />
-        </div>
-        <label className="label compact">Creative liberties</label>
-        <textarea aria-label="Creative liberties" value={research.creativeLiberties || ''} onChange={e => setResearch({ ...research, creativeLiberties: e.target.value })} rows="2" placeholder="What Avirzo may dramatize or reconstruct — and what it must not invent…" />
-      </div>
-
       <div className="research-grid">
         {[['location', 'Location / community'], ['period', 'Date / historical period'], ['focus', 'Research focus']].map(([key, label]) => (
           <input aria-label={label}
@@ -98,7 +71,6 @@ export function ResearchPanel({
         rows="3"
         placeholder="Details Avirzo must not present as established fact…"
       />
-      {(research.verificationStatus === 'community-review' || research.verificationStatus === 'needs-review') && <div className="ai-warning"><b>Heritage review:</b> Avirzo will keep this material visibly marked for verification rather than presenting uncertain details as established fact.</div>}
       <div className="source-box">
         <strong>Sources</strong>
         {research.sources?.length ? (

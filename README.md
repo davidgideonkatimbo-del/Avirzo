@@ -2,7 +2,7 @@
 
 Avirzo is an AI filmmaking studio focused on African heritage, history, oral tradition, languages and culturally grounded visual storytelling.
 
-**Current release: v2.9.2 — Billing Portal & Export Provenance** (premium cinematic studio on the durable production job system).
+**Current release: v2.9.3 — Billing Portal & Export Provenance** (premium cinematic studio on the durable production job system).
 
 ## Current production procedure
 - Keep the web service as the first deployment target.

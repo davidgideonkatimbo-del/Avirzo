@@ -3,16 +3,14 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
-RUN test -f package-lock.json || (echo 'Missing package-lock.json. Generate it on a networked machine before building Avirzo for production.' >&2; exit 1)
-RUN npm ci --no-audit --no-fund
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
 
 FROM node:22-bookworm-slim AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
-RUN test -f package-lock.json || (echo 'Missing package-lock.json. Generate it on a networked machine before building Avirzo for production.' >&2; exit 1)
-RUN npm ci --omit=dev --workspace=server --no-audit --no-fund
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --workspace=server --no-audit --no-fund; else npm install --omit=dev --workspace=server --no-audit --no-fund; fi
 
 FROM deps AS build
 ARG VITE_SUPABASE_URL

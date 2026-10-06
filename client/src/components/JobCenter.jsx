@@ -1,18 +1,6 @@
 import React from 'react';
 
-const STATUS_COPY = {
-  queued: 'Queued — waiting for the Avirzo worker.',
-  running: 'Rendering in the background. You can keep working.',
-  failed: 'This job could not finish. Check the message and retry when ready.',
-  canceled: 'Canceled by you.',
-  dead_letter: 'Stopped after repeated worker failures. A fresh export is recommended.'
-};
-
-function jobLabel(type) {
-  return String(type || 'job').replaceAll('_', ' ');
-}
-
-export function JobCenter({ jobs, recent = [], onCancel, onRetry, busyJobId, retryingJobId, onRefresh, refreshing = false }) {
+export function JobCenter({ jobs, recent = [], onCancel, onRetry, busyJobId, retryingJobId }) {
   const visible = jobs.filter(job => ['queued', 'running', 'failed', 'canceled', 'dead_letter'].includes(job.status)).slice(0, 8);
   const visibleIds = new Set(visible.map(job => job.id));
   const completed = recent.filter(job => ['succeeded', 'dead_letter'].includes(job.status) && !visibleIds.has(job.id)).slice(0, 5);
@@ -23,16 +11,20 @@ export function JobCenter({ jobs, recent = [], onCancel, onRetry, busyJobId, ret
       <div className="section-head">
         <div>
           <div className="eyebrow">PRODUCTION JOBS</div>
-          <h2>Rendering & export</h2><p className="job-center-intro">Avirzo keeps long renders in the background so you can continue building your film.</p>
+          <h2>Rendering & export</h2>
         </div>
-        <div className="inline-actions"><button type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button><span className="status-pill rendering">LIVE</span></div>
+        <span className="status-pill rendering">LIVE</span>
       </div>
       {visible.map(job => (
         <div className="job-row" key={job.id}>
           <div>
-            <strong>{jobLabel(job.type)}</strong>
-            <small>{STATUS_COPY[job.status] || 'Avirzo job is being processed.'}</small>
-            {job.error && <small className="job-error">{job.error}</small>}
+            <strong>{String(job.type).replaceAll('_', ' ')}</strong>
+            <small>
+              {job.provider_task_id
+                ? `Provider task ${String(job.provider_task_id).slice(0, 8)}…`
+                : 'Avirzo job'}
+              {job.error ? ` · ${job.error}` : ''}
+            </small>
           </div>
           <div className="job-progress" aria-hidden="true">
             <span style={{ width: `${Math.max(4, Math.min(100, Number(job.progress) || 0))}%` }} />
@@ -56,7 +48,7 @@ export function JobCenter({ jobs, recent = [], onCancel, onRetry, busyJobId, ret
           {completed.map(job => (
             <div className="job-row completed" key={`recent-${job.id}`}>
               <div>
-                <strong>{jobLabel(job.type)}</strong>
+                <strong>{String(job.type).replaceAll('_', ' ')}</strong>
                 <small>
                   {job.status === 'succeeded'
                     ? 'Completed successfully'

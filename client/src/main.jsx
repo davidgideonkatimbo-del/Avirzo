@@ -1,32 +1,29 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { supabase, supabaseEnabled } from './supabase';
 import { useJobs } from './hooks/useJobs';
-const JobCenter = lazy(() => import('./components/JobCenter').then(m => ({ default: m.JobCenter })));
-const BillingPanel = lazy(() => import('./components/BillingPanel').then(m => ({ default: m.BillingPanel })));
-const TemplatePicker = lazy(() => import('./components/TemplatePicker').then(m => ({ default: m.TemplatePicker })));
+import { JobCenter } from './components/JobCenter';
+import { TemplatePicker } from './components/TemplatePicker';
 import { AppShell } from './components/AppShell';
 import { ProfilePanel } from './components/ProfilePanel';
 import { SettingsPanel } from './components/SettingsPanel';
-const VoicesPanel = lazy(() => import('./components/VoicesPanel').then(m => ({ default: m.VoicesPanel })));
-const ProjectsPanel = lazy(() => import('./components/ProjectsPanel').then(m => ({ default: m.ProjectsPanel })));
-const ResearchPanel = lazy(() => import('./components/ResearchPanel').then(m => ({ default: m.ResearchPanel })));
-const TimelinePanel = lazy(() => import('./components/TimelinePanel').then(m => ({ default: m.TimelinePanel })));
-const CharacterBible = lazy(() => import('./components/CharacterBible').then(m => ({ default: m.CharacterBible })));
-const StoryComposer = lazy(() => import('./components/StoryComposer').then(m => ({ default: m.StoryComposer })));
-const Storyboard = lazy(() => import('./components/Storyboard').then(m => ({ default: m.Storyboard })));
-const FilmLookControls = lazy(() => import('./components/FilmLookControls').then(m => ({ default: m.FilmLookControls })));
-const ProductionPanel = lazy(() => import('./components/ProductionPanel').then(m => ({ default: m.ProductionPanel })));
-const AIFilmmakingPanel = lazy(() => import('./components/AIFilmmakingPanel').then(m => ({ default: m.AIFilmmakingPanel })));
-const RootsFoundation = lazy(() => import('./components/RootsFoundation').then(m => ({ default: m.RootsFoundation })));
-const StoryIntelligencePanel = lazy(() => import('./components/StoryIntelligencePanel').then(m => ({ default: m.StoryIntelligencePanel })));
-const FirstSceneFocus = lazy(() => import('./components/FirstSceneFocus').then(m => ({ default: m.FirstSceneFocus })));
-const WorldBible = lazy(() => import('./components/WorldBible').then(m => ({ default: m.WorldBible })));
-const CharacterContinuity = lazy(() => import('./components/CharacterContinuity').then(m => ({ default: m.CharacterContinuity })));
-const AssetsPanel = lazy(() => import('./components/AssetsPanel').then(m => ({ default: m.AssetsPanel })));
-const ProjectWorkspace = lazy(() => import('./components/ProjectWorkspace').then(m => ({ default: m.ProjectWorkspace })));
-import { CreatorJourney } from './components/CreatorJourney';
+import { VoicesPanel } from './components/VoicesPanel';
+import { ProjectsPanel } from './components/ProjectsPanel';
+import { ResearchPanel } from './components/ResearchPanel';
+import { TimelinePanel } from './components/TimelinePanel';
+import { CharacterBible } from './components/CharacterBible';
+import { StoryComposer } from './components/StoryComposer';
+import { Storyboard } from './components/Storyboard';
+import { FilmLookControls } from './components/FilmLookControls';
+import { ProductionPanel } from './components/ProductionPanel';
+import { AIFilmmakingPanel } from './components/AIFilmmakingPanel';
+import { RootsFoundation } from './components/RootsFoundation';
+import { StoryIntelligencePanel } from './components/StoryIntelligencePanel';
+import { WorldBible } from './components/WorldBible';
+import { CharacterContinuity } from './components/CharacterContinuity';
+import { AssetsPanel } from './components/AssetsPanel';
+import { ProjectWorkspace } from './components/ProjectWorkspace';
 import {
   africanProfiles,
   emptyCharacter, emptyResearch, heritageTemplates, styles, cameras, formats, durations
@@ -66,7 +63,7 @@ function App(){
   const authHeaders=useCallback(async()=>{ if(!supabase) return {}; const {data}=await supabase.auth.getSession(); return data.session?.access_token?{Authorization:`Bearer ${data.session.access_token}`}:{ }; },[]);
   const apiFetch=useCallback(async(url, options={})=>{ const headers={...(options.headers||{}),...(await authHeaders())}; return fetch(url,{...options,headers}); },[authHeaders]);
   const [activeJobId,setActiveJobId]=useState(''); const [cancelingJobId,setCancelingJobId]=useState(''); const [retryingJobId,setRetryingJobId]=useState(''); const [exportJobId,setExportJobId]=useState('');
-  const { jobs, recentJobs, refreshJobs, refreshNow, refreshing, cancelJob, retryJob } = useJobs(apiFetch, Boolean(authUser), projectId);
+  const { jobs, recentJobs, refreshJobs, cancelJob, retryJob } = useJobs(apiFetch, Boolean(authUser), projectId);
   async function cancelActiveJob(id){ setCancelingJobId(id); try{ await cancelJob(id); setActiveJobId(''); setGenerating(false); setExporting(false); setMessage('Job canceled.'); }catch(e){setMessage(e.message||'Could not cancel job.')}finally{setCancelingJobId('');} }
   async function retryActiveJob(id){ setRetryingJobId(id); try{ await retryJob(id); setMessage('Job queued for retry.'); }catch(e){setMessage(e.message||'Could not retry job.')}finally{setRetryingJobId('');} }
   useEffect(()=>{ const job=jobs.find(x=>x.id===exportJobId); if(!job)return; if(job.status==='succeeded'&&job.result_asset_id&&!exportUrl){ openAsset(job.result_asset_id).then(url=>{if(url){setExportUrl(url);setMessage('Film export is ready and archived in your private media library.');setExporting(false);}}); } else if(job.status==='failed'){setExporting(false);setMessage(job.error||'Film export failed.');} else if(job.status==='canceled'){setExporting(false);setMessage('Film export canceled.');} },[jobs,exportJobId,exportUrl]);
@@ -131,7 +128,7 @@ function App(){
   function removeCaption(id){setCaptions(p=>p.filter(x=>x.id!==id));}
   function updateAudio(id,key,value){setAudioTracks(p=>p.map(x=>x.id===id?{...x,[key]:value}:x));}
   function removeAudio(id){setAudioTracks(p=>p.filter(x=>x.id!==id));}
-  async function exportFilm(){const ordered=scenes.filter(s=>s.videoUrl);if(!ordered.length)return setMessage('Generate at least one scene before exporting.');setExporting(true);setExportUrl('');setExportSrt('');setMessage('Submitting film export to the production worker…');try{const payload={title:'Avirzo film',projectId,format,scenes:ordered.map(s=>({id:s.id,number:s.number,title:s.title,videoUrl:s.videoUrl,assetId:s.assetId||null})),audioTracks,captions,duckMusic,captionMode,quality:exportQuality,includeSrt,aiEndCard,review};const r=await apiFetch('/api/export/film',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.message||'Film export failed.');setExportJobId(d.jobId||'');if(d.downloadUrl){setExportUrl(d.downloadUrl);if(d.srt)setExportSrt(d.srt);setExporting(false);const archived=d.assetId ? {asset:{id:d.assetId},url:d.downloadUrl} : await persistAsset(d.downloadUrl,'export',projectName||'avirzo-film');if(archived?.url)setExportUrl(archived.url);setMessage(`Film assembled${d.captionMode?` · captions ${d.captionMode}`:''}${d.quality?` · ${d.quality} quality`:''}.`);}else{setMessage('Film export queued. You can keep working while the worker renders it.');}}catch(e){setMessage(e.message||'Film export failed.');setExporting(false)}}
+  async function exportFilm(){const ordered=scenes.filter(s=>s.videoUrl);if(!ordered.length)return setMessage('Generate at least one scene before exporting.');setExporting(true);setExportUrl('');setExportSrt('');setMessage('Submitting film export to the production worker…');try{const payload={title:'Avirzo film',projectId,format,scenes:ordered.map(s=>({id:s.id,number:s.number,title:s.title,videoUrl:s.videoUrl,assetId:s.assetId||null})),audioTracks,captions,duckMusic,captionMode,quality:exportQuality,includeSrt,aiEndCard};const r=await apiFetch('/api/export/film',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.message||'Film export failed.');setExportJobId(d.jobId||'');if(d.downloadUrl){setExportUrl(d.downloadUrl);if(d.srt)setExportSrt(d.srt);setExporting(false);const archived=d.assetId ? {asset:{id:d.assetId},url:d.downloadUrl} : await persistAsset(d.downloadUrl,'export',projectName||'avirzo-film');if(archived?.url)setExportUrl(archived.url);setMessage(`Film assembled${d.captionMode?` · captions ${d.captionMode}`:''}${d.quality?` · ${d.quality} quality`:''}.`);}else{setMessage('Film export queued. You can keep working while the worker renders it.');}}catch(e){setMessage(e.message||'Film export failed.');setExporting(false)}}
 
   async function addCharacter(){ if(!draft.name.trim()) return setMessage('Give the character a name first.'); const candidate={...draft,id:`char-${Date.now()}-${Math.random().toString(36).slice(2,7)}`}; try{ const r=await apiFetch('/api/characters/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({characters:[candidate]})}); const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.message||'Character validation failed.'); if(!data.ok){setCharacterStatus(data.warnings?.join(' '));} else {setCharacterStatus('Visual identity is complete enough for continuity prompts.');} setCharacters(p=>[...p,candidate]); setDraft({...emptyCharacter}); setMessage(`${draft.name} added to the Heritage Bible.`); }catch(e){setCharacterStatus(e.message||'Could not validate the character.');setMessage('Character was not added because validation could not be completed.');} }
   function removeCharacter(id){setCharacters(p=>p.filter(c=>c.id!==id));}
@@ -251,7 +248,6 @@ function App(){
         <TemplatePicker visible={showTemplates} onSelect={applyTemplate} onDismiss={()=>setShowTemplates(false)} />
         {mode==='story' ? <>
           <StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/>
-          {scenes.length > 0 && <FirstSceneFocus scene={scenes[0]} scenesCount={scenes.length} generating={generating} updateScene={updateScene} generateScene={generateScene} openScenes={()=>navigate('scenes')} style={style} camera={camera} duration={duration} format={format} profile={profile} era={era} />}
           <StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/>
         </> : <>
           <AIFilmmakingPanel visible={showAICopilot} apiFetch={apiFetch} story={story} characters={characters.map(characterPayload)} scenes={scenes} research={research} rootsFoundation={rootsFoundation} era={era} storyType={storyType} profile={profile} setScenes={setScenes} setMessage={setMessage}/>
@@ -284,7 +280,6 @@ function App(){
         <div className="card-inset"><span>NOW</span><strong>{projectName || 'No film selected'}</strong><small>{scenes.length} scenes · {characters.length} characters</small></div>
         <div className="card-inset"><span>STATUS</span><strong>{authUser ? 'Cloud' : 'Local'} · FFmpeg ready</strong><small>{recentJobs.length} recent jobs</small></div>
       </section>
-      <CreatorJourney onStart={()=>navigate('studio')} onOpenTemplates={()=>{ setShowTemplates(true); navigate('studio'); }} />
     </>;
   }
 
@@ -303,24 +298,21 @@ function App(){
     if(pageName==='home') return renderHome();
     if(pageName==='studio') return renderStudio();
     if(pageName==='projects') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">PROJECT LIBRARY</div><h1>Your films</h1><p>Your films, folders and workspaces.</p></section><ProjectsPanel {...projectProps} visible />{showProduction && <ProductionPanel visible apiFetch={apiFetch} projectId={projectId} scenes={scenes}/>}</div>;
-    if(pageName==='heritage') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">HERITAGE BIBLE</div><h1>Heritage Bible</h1><p>Keep the world, research and characters together.</p></section><RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><ResearchPanel {...researchProps} visible /><CharacterBible {...bibleProps} visible /><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/><ResearchStoryBridge research={research} rootsFoundation={rootsFoundation} scenes={scenes}/></div>;
-    if(pageName==='story') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">STORY DEVELOPMENT</div><h1>Story</h1><p>Build the story, then send it to Scenes.</p></section><StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/><ResearchStoryBridge research={research} rootsFoundation={rootsFoundation} scenes={scenes}/></div>;
-    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section><Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene} apiFetch={apiFetch} authUser={authUser}/></div>;
+    if(pageName==='heritage') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">HERITAGE BIBLE</div><h1>Heritage Bible</h1><p>Keep the world, research and characters together.</p></section><RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><ResearchPanel {...researchProps} visible /><CharacterBible {...bibleProps} visible /><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
+    if(pageName==='story') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">STORY DEVELOPMENT</div><h1>Story</h1><p>Build the story, then send it to Scenes.</p></section><StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
+    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section><Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
     if(pageName==='voices') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">CHARACTER VOICES</div><h1>Voices</h1><p>Create dialogue and character voices.</p></section><VoicesPanel visible characters={characters} setCharacters={setCharacters} profile={profile} voiceGenerating={voiceGenerating} voiceAudio={voiceAudio} voiceStatus={voiceStatus} generateCharacterVoice={generateCharacterVoice}/></div>;
     if(pageName==='timeline') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EDITING TIMELINE</div><h1>Timeline</h1><p>Assemble scenes, sound and captions.</p></section><TimelinePanel {...timelineProps} visible /></div>;
     if(pageName==='assets') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">MEDIA LIBRARY</div><h1>Assets</h1><p>Images, clips and audio for this film.</p></section><AssetsPanel authUser={authUser} projectId={projectId} projectName={projectName} assets={assets} assetStatus={assetStatus} refreshAssets={refreshAssets} openAsset={openAsset} deleteAsset={deleteAsset}/></div>;
-    if(pageName==='exports') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EXPORTS & JOBS</div><h1>Exports</h1><p>Exports and background jobs.</p></section><JobCenter jobs={jobs} recent={recentJobs} busyJobId={cancelingJobId} retryingJobId={retryingJobId} onCancel={cancelActiveJob} onRetry={retryActiveJob} onRefresh={refreshNow} refreshing={refreshing}/><TimelinePanel {...timelineProps} visible /></div>;
+    if(pageName==='exports') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EXPORTS & JOBS</div><h1>Exports</h1><p>Exports and background jobs.</p></section><JobCenter jobs={jobs} recent={recentJobs} busyJobId={cancelingJobId} retryingJobId={retryingJobId} onCancel={cancelActiveJob} onRetry={retryActiveJob}/><TimelinePanel {...timelineProps} visible /></div>;
     if(pageName==='profile') return <ProfilePanel {...{authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut}} />;
     if(pageName==='settings') return <SettingsPanel format={format} setFormat={setFormat} style={style} setStyle={setStyle} camera={camera} setCamera={setCamera} duration={duration} setDuration={setDuration} styles={styles} cameras={cameras} formats={formats} durations={durations}/>;
-    if(pageName==='billing') return <BillingPanel visible apiFetch={apiFetch} authUser={authUser}/>;
     return renderHome();
   }
 
   return <AppShell page={viewPage} navigate={navigate} authUser={authUser} projectId={projectId} projectName={projectName} inProjectRoute={inProjectRoute} routeProjectId={routeProjectId}>
-    <Suspense fallback={<section className="page-loading" role="status" aria-live="polite"><span className="eyebrow">AVIRZO</span><strong>Loading your filmmaking workspace…</strong><small>The next studio panel is loading.</small></section>}>
-      {renderPage()}
-      {videoUrl&&viewPage!=='scenes'&&<section className="bible-panel result"><div className="eyebrow">LATEST RENDER</div><video aria-label="Video preview" controls playsInline src={videoUrl}/><a className="download" href={videoUrl} target="_blank" rel="noreferrer">Open generated video</a><small>Provider video URLs are temporary; completed project media is archived in your private Storage library when cloud storage is enabled.</small></section>}
-    </Suspense>
+    {renderPage()}
+    {videoUrl&&page!=='scenes'&&<section className="bible-panel result"><div className="eyebrow">LATEST RENDER</div><video aria-label="Video preview" controls playsInline src={videoUrl}/><a className="download" href={videoUrl} target="_blank" rel="noreferrer">Open generated video</a><small>Provider video URLs are temporary; completed project media is archived in your private Storage library when cloud storage is enabled.</small></section>}
   </AppShell>;
 }
 createRoot(document.getElementById('root')).render(<AppErrorBoundary><App/></AppErrorBoundary>);
