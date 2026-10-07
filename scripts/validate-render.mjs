@@ -34,6 +34,8 @@ const required = [
   ['Supabase worker secret', /key:\s+SUPABASE_SERVICE_ROLE_KEY/],
   ['public URL', /key:\s+AVIRZO_PUBLIC_URL/],
   ['worker Vite URL', /name:\s+avirzo-worker[\s\S]*?key:\s+VITE_SUPABASE_URL/],
+  ['quoted numeric env values', /^(?![\s\S]*?value:[ \t]+\d+[ \t]*(?:\r?\n|$))/],
+  ['explicit worker flag', /key:\s+AVIRZO_WORKER_ENABLED/],
   ['worker Vite key', /name:\s+avirzo-worker[\s\S]*?key:\s+VITE_SUPABASE_PUBLISHABLE_KEY/],
 ];
 for (const [name, re] of required) {

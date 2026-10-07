@@ -32,8 +32,10 @@ export function registerRoutes(app, ctx) {
 
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 15 * 1024 * 1024) return res.status(413).json({ message: 'Export request is too large for the durable worker queue. Upload large audio files to Avirzo private media storage first.' });
 
-    const job = await jobs.create({ userId: exportUser.id, projectId: payload.projectId, type: 'film_export', payload });
-    if (IS_PRODUCTION && WORKER_ENABLED) {
+    const queueForWorker = IS_PRODUCTION && WORKER_ENABLED;
+    // Inline exports are created as 'running' so a deployed worker never claims (and re-renders) the same job.
+    const job = await jobs.create({ userId: exportUser.id, projectId: payload.projectId, type: 'film_export', payload, status: queueForWorker ? 'queued' : 'running' });
+    if (queueForWorker) {
       return res.status(202).json({ status: 'queued', jobId: job.id, message: 'Your film export has been queued. You can keep working while it renders.' });
     }
 

@@ -114,3 +114,14 @@ test('navigation organizes existing features without adding new routes', () => {
   assert.match(shell, /const NAV_LOOKUP = \[{ id: 'home', label: 'Home'/);
   assert.match(shell, /NAV_LOOKUP\.find\(x => x\.id === id\)/);
 });
+
+test('inline exports are never left queued for a deployed worker to claim', () => {
+  const route = read('server/src/routes/export.js');
+  assert.match(route, /status: queueForWorker \? 'queued' : 'running'/);
+});
+
+test('render.yaml env values are quoted strings and the worker flag is explicit', () => {
+  const yaml = read('render.yaml');
+  assert.doesNotMatch(yaml, /value:\s+\d+\s*$/m);
+  assert.match(yaml, /key: AVIRZO_WORKER_ENABLED\s+value: "false"/);
+});

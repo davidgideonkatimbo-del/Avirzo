@@ -10,9 +10,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: "10000"
       - key: HOST
         value: 0.0.0.0
+      # Exports run inline in the web service. Set to "true" only after the avirzo-worker service is live.
+      - key: AVIRZO_WORKER_ENABLED
+        value: "false"
       - key: RUNWAYML_API_SECRET
         sync: false
       - key: ELEVENLABS_API_KEY
@@ -97,6 +100,6 @@ services:
       - key: AVIRZO_PUBLIC_URL
         sync: false
       - key: WORKER_MAX_ATTEMPTS
-        value: 3
+        value: "3"
       - key: WORKER_POLL_MS
-        value: 5000
+        value: "5000"
