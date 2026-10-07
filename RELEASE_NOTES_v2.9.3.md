@@ -11,3 +11,4 @@
 - Render fixes: numeric env values in `render.yaml` are now quoted strings; `AVIRZO_WORKER_ENABLED` is explicit (`"false"`) on the web service.
 - Inline film exports are created as `running` so a deployed worker can never claim and re-render the same job.
 - `.env.example` duplicate keys removed; `validate:render` now rejects unquoted numeric env values.
+- Production boot error now names SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and SUPABASE_SERVICE_ROLE_KEY.
