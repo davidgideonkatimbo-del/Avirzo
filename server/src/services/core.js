@@ -130,7 +130,7 @@ function usageWindowStart(kind, date = new Date()) {
   if (RATE_LIMITS[kind]?.window === 'year') {
     start.setUTCMonth(0, 1);
     start.setUTCHours(0, 0, 0, 0);
-    return start;
+    return new Date(Date.UTC(start.getUTCFullYear(), 0, 1));
   }
   start.setUTCMinutes(0, 0, 0);
   return start;

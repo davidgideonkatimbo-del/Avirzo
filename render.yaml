@@ -15,7 +15,8 @@ services:
         value: 0.0.0.0
       # Exports run inline in the web service. Set to "true" only after the avirzo-worker service is live.
       - key: AVIRZO_WORKER_ENABLED
-        value: "false"
+        value: "false" # explicit worker opt-in; value: 'false' is the disabled state
+
       - key: RUNWAYML_API_SECRET
         sync: false
       - key: ELEVENLABS_API_KEY
