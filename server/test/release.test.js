@@ -125,3 +125,23 @@ test('render.yaml env values are quoted strings and the worker flag is explicit'
   assert.doesNotMatch(yaml, /value:\s+\d+\s*$/m);
   assert.match(yaml, /key: AVIRZO_WORKER_ENABLED\s+value: "false"/);
 });
+
+test('project cloud saves are verified against the database before success is returned', () => {
+  const route = read('server/src/routes/projects.js');
+  assert.match(route, /supabaseAdmin\.from\('avirzo_projects'\)/);
+  assert.match(route, /Project write could not be verified after saving/);
+  assert.match(route, /Project update could not be verified after saving/);
+  assert.match(route, /verified: true/);
+});
+
+test('Runway Gen-4.5 uses image_to_video for both text and image generation', () => {
+  const route = read('server/src/routes/generation.js');
+  assert.match(route, /const endpoint = 'image_to_video'/);
+  assert.doesNotMatch(route, /const endpoint = ref \? 'image_to_video' : 'text_to_video'/);
+});
+
+test('client save flow requires server verification and generation persists the completed scene', () => {
+  const main = read('client/src/main.jsx');
+  assert.match(main, /d\.verified!==true/);
+  assert.match(main, /saveProjectSnapshot\(\{scenes:nextScenes,timeline:nextTimeline\}\)/);
+});

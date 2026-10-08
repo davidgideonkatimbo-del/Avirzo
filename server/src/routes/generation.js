@@ -31,7 +31,9 @@ export function registerRoutes(app, ctx) {
     if (projectId && !(await requireOwnedProject(providerUser.id, projectId))) return res.status(404).json({ message: 'Project not found.' });
     job = await jobs.create({ userId: providerUser.id, projectId, type: 'video_generation', status: 'queued' });
     const promptText = buildCinematicPrompt({ prompt, style, camera, sceneNumber, africanProfile: profile, era, storyType, historicalNotes, characters, researchBrief, referenceCharacter, continuityContext: serverContinuity, worldBible });
-    const endpoint = ref ? 'image_to_video' : 'text_to_video';
+    // Runway Gen-4.5 uses the image_to_video task endpoint for both image-to-video
+    // and text-to-video. A promptImage is optional when generating from text alone.
+    const endpoint = 'image_to_video';
     const response = await fetch(`${RUNWAY_API}/${endpoint}`, { method: 'POST', headers: runwayHeaders(), body: JSON.stringify({ model: 'gen4.5', promptText, ...(ref ? { promptImage: ref } : {}), ratio, duration: seconds }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
