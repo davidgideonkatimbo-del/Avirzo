@@ -67,16 +67,21 @@ test('mobile form fields prevent iOS zoom and keyboard navigation hides the bott
   assert.match(appShell, /focusout/);
 });
 
+test('New project keeps the Projects panel visible so the blank project can be named and saved', () => {
+  const main = read('client/src/main.jsx');
+  assert.match(main, /function newProject\(\)[\s\S]*?setMessage\('New project started[\s\S]*?setShowProjects\(true\)/);
+});
+
 test('mobile long text and plain action buttons have explicit protection', () => {
   const css = read('client/src/styles.css');
   const projects = read('client/src/components/ProjectsPanel.jsx');
   const profile = read('client/src/components/ProfilePanel.jsx');
   assert.match(css, /overflow-wrap:anywhere/);
   assert.match(css, /\.plain-action\{/);
-  assert.match(projects, /className="plain-action"[^>]*>\+ New project/);
+  assert.match(projects, /className="plain-action"[^>]*>\s*\+ New project/);
   // Profile uses a dedicated premium button class; accept it while preserving the
   // generic plain-action class check for the project creation action.
-  assert.match(profile, /className="(?:plain-action|profile-secondary-action)"[^>]*>Sign out/);
+  assert.match(profile, /className="(?:plain-action|profile-secondary-action)"[^>]*>\s*Sign out/);
   assert.match(css, /\.profile-secondary-action\{/);
 });
 
