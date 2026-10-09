@@ -74,7 +74,10 @@ test('mobile long text and plain action buttons have explicit protection', () =>
   assert.match(css, /overflow-wrap:anywhere/);
   assert.match(css, /\.plain-action\{/);
   assert.match(projects, /className="plain-action"[^>]*>\+ New project/);
-  assert.match(profile, /className="plain-action"[^>]*>Sign out/);
+  // Profile uses a dedicated premium button class; accept it while preserving the
+  // generic plain-action class check for the project creation action.
+  assert.match(profile, /className="(?:plain-action|profile-secondary-action)"[^>]*>Sign out/);
+  assert.match(css, /\.profile-secondary-action\{/);
 });
 
 test('phone Home keeps the existing primary action visually dominant', () => {
