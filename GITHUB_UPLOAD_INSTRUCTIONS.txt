@@ -1,4 +1,4 @@
-AVIRZO v2.9.3 — GITHUB UPLOAD PACKAGE
+AVIRZO v2.9.6 — GITHUB UPLOAD PACKAGE
 
 IMPORTANT:
 This package already has the correct repository directory structure.

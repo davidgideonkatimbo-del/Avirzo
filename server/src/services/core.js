@@ -8,7 +8,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 export const HOST = process.env.HOST || '0.0.0.0';
 export const RUNWAY_API = 'https://api.dev.runwayml.com/v1';
 export const RUNWAY_VERSION = '2024-11-06';
-export const APP_VERSION = '2.9.3';
+export const APP_VERSION = '2.9.6';
 export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
