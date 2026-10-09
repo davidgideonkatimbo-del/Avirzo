@@ -21,10 +21,37 @@ export function TimelinePanel({
   includeSrt, setIncludeSrt, aiEndCard, setAiEndCard, review, setReview,
   addAudioTrack, updateAudio, removeAudio,
   addCaption, updateCaption, removeCaption,
-  exporting, exportFilm, exportUrl, exportSrt,
+  exporting, exportFilm, exportUrl, exportSrt, projectName,
   format
 }) {
   if (!visible) return null;
+
+  async function shareFinishedVideo() {
+    if (!exportUrl) return;
+    const title = projectName || 'Avirzo film';
+    try {
+      if (navigator.share) {
+        let sharedFile = false;
+        try {
+          const response = await fetch(exportUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const file = new File([blob], `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'avirzo-film'}.mp4`, { type: blob.type || 'video/mp4' });
+            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+              await navigator.share({ title, text: `Created with Avirzo — ${title}`, files: [file] });
+              sharedFile = true;
+            }
+          }
+        } catch {}
+        if (!sharedFile) await navigator.share({ title, text: `Created with Avirzo — ${title}`, url: exportUrl });
+        return;
+      }
+      await navigator.clipboard?.writeText(exportUrl);
+      window.alert('Video link copied. You can paste it into your social post.');
+    } catch (error) {
+      if (error?.name !== 'AbortError') window.alert('Sharing is not available here. Download the video and upload it to your social platform.');
+    }
+  }
 
   function downloadSrt() {
     if (!exportSrt) return;
@@ -188,8 +215,16 @@ export function TimelinePanel({
 
       {exportUrl && (
         <div className="export-result heritage-callout">
-          <strong>🎬 Film export ready.</strong>{' '}
-          <a href={exportUrl} target="_blank" rel="noreferrer">Open / download assembled film</a>
+          <div className="export-result-head">
+            <div>
+              <strong>🎬 Film export ready.</strong>
+              <p className="muted">Your finished film is ready to share. On Android and iOS, Share Video opens the system share sheet when supported.</p>
+            </div>
+            <div className="share-actions">
+              <button type="button" className="generate" onClick={shareFinishedVideo}>Share video</button>
+              <a className="download" href={exportUrl} target="_blank" rel="noreferrer" download>Download MP4</a>
+            </div>
+          </div>
           {exportSrt && (
             <>
               {' · '}

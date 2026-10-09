@@ -218,7 +218,7 @@ function App(){
   const projectFolders=['All folders',...Array.from(new Set(projects.map(p=>p.folder||'My Films'))).sort()];
   const projectProps={projectFolder, setProjectFolder, projectFolderFilter, setProjectFolderFilter, projectFolders, visibleProjects, authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut,projectId,projectName,setProjectName,projects,projectStatus,projectLoading,newProject,saveProject,loadProject,deleteProject,assets,assetStatus,refreshAssets,openAsset,deleteAsset};
   const researchProps={research,setResearch,researchStatus,setResearchStatus,setEra,setAfricanProfile,setStoryType};
-  const timelineProps={timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,aiEndCard,setAiEndCard,review,setReview,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,format};
+  const timelineProps={timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,aiEndCard,setAiEndCard,review,setReview,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,projectName,format};
   const bibleProps={characters,draft,setDraft,characterStatus,setCharacterStatus,addCharacter,removeCharacter,generateCharacterPerformance,uploadMediaToCloud,fileToDataUrl};
   const collaborationProps={apiFetch,projectId,authUser,projectName};
 

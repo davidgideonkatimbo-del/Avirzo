@@ -85,7 +85,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
       document.removeEventListener('focusout', onFocusOut);
     };
   }, []);
-  const active = inProjectRoute ? 'projects' : (NAV_LOOKUP.some(x => x.id === page) ? page : 'home');
+  const active = inProjectRoute ? 'projects' : (NAV_LOOKUP.some(x => x.id === page) || page === 'profile' || page === 'settings' ? page : 'home');
 
   return (
     <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
@@ -123,7 +123,7 @@ export function AppShell({ page, navigate, authUser, projectId, projectName, inP
             <span className="account-avatar">{authUser?.email?.slice(0, 1)?.toUpperCase() || 'A'}</span>
             <span>{authUser?.email || 'Creator workspace'}</span>
           </div>
-          <small>v2.9.3</small>
+          <small>v2.9.5</small>
         </div>
       </aside>
 

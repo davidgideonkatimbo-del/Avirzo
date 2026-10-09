@@ -19,3 +19,10 @@
 - Node syntax checks pass for the modified server modules.
 - Full Vite production build was not certified in this environment because dependencies were not installed in the uploaded ZIP and the dependency installation attempt timed out. Render/Docker should perform the dependency installation and production build.
 - No package-lock.json was fabricated.
+
+## v2.9.4 premium creator polish
+- Redesigned creator profile as an editorial/cinematic creator workspace rather than a dashboard card layout.
+- Fixed mobile topbar context so Profile and Settings no longer display HOME.
+- Improved long email/account text handling on narrow screens.
+- Kept all existing authentication and profile actions intact.
+- No new product features or provider behavior changed in this polish pass.
