@@ -552,3 +552,37 @@ notify pgrst, 'reload schema';
 -- =====================================================================
 alter table public.avirzo_project_invites add column if not exists expires_at timestamptz default (now() + interval '7 days');
 notify pgrst, 'reload schema';
+
+-- =====================================================================
+-- v2.12 live collaboration (safe to re-run).
+-- The client joins PRIVATE Realtime channels named  avirzo:project:<project uuid>  (Broadcast for field patches, Presence for who is online).
+-- These policies make Postgres decide who may join and who may write, using the same role function as the tables:
+--   * any project member (owner/editor/commenter/viewer) can receive broadcasts and appear in presence
+--   * only owner/editor can SEND field patches; viewers and commenters cannot push edits into other people's screens
+-- Isolation: this block only ADDS two avirzo_-named policies on realtime.messages (policies are OR-ed, and these match only
+-- topics that start with "avirzo:project:"), plus one avirzo_-named function. It does not alter, drop or restrict anything
+-- used by your other apps. It does NOT change any Realtime dashboard setting.
+-- =====================================================================
+create or replace function public.avirzo_topic_project_id(p_topic text)
+returns uuid
+language sql
+immutable
+as $$
+  select case when p_topic ~ '^avirzo:project:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then split_part(p_topic, ':', 3)::uuid end;
+$$;
+
+drop policy if exists "avirzo_realtime_receive" on realtime.messages;
+create policy "avirzo_realtime_receive" on realtime.messages for select to authenticated using (
+  public.avirzo_topic_project_id(realtime.topic()) is not null
+  and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') <> ''
+);
+
+drop policy if exists "avirzo_realtime_send" on realtime.messages;
+create policy "avirzo_realtime_send" on realtime.messages for insert to authenticated with check (
+  public.avirzo_topic_project_id(realtime.topic()) is not null
+  and (
+    (realtime.messages.extension = 'presence' and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') <> '')
+    or (realtime.messages.extension = 'broadcast' and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') in ('owner','editor'))
+  )
+);

@@ -6,7 +6,7 @@ const ROLES = [
   { id: 'viewer', label: 'Viewer', note: 'Read-only access to the project.' }
 ];
 
-export function CollaborationPanel({ visible, apiFetch, projectId, authUser, projectName }) {
+export function CollaborationPanel({ visible, apiFetch, projectId, authUser, projectName, room }) {
   const [members, setMembers] = useState([]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('editor');
@@ -64,6 +64,11 @@ export function CollaborationPanel({ visible, apiFetch, projectId, authUser, pro
         <small>Invites are safe to resend. The recipient gets access after signing in with the invited email.</small>
         {shareLink && <div className="heritage-callout"><strong>Share link:</strong> {shareLink}</div>}
       </div>
+      {room && room.status !== 'solo' && <div className="heritage-callout" aria-live="polite">
+        <strong>{room.status === 'live' ? 'Live' : room.status === 'error' ? 'Live sync unavailable' : 'Connecting…'}</strong>
+        {room.status === 'live' && <> · {room.peers.length ? room.peers.map(p => p.email || 'Collaborator').join(', ') + (room.peers.length === 1 ? ' is here' : ' are here') : 'only you are here'}{!room.canSend ? ' · you can watch changes but not push edits' : ''}</>}
+        {Object.keys(room.held || {}).length > 0 && <div><small>Held back while you type: {Object.entries(room.held).map(([f, h]) => `${f} (${h.from})`).join(', ')}. Pause typing to receive it.</small></div>}
+      </div>}
       <div className="member-list">{members.length ? members.map(m => <div className="member-row" key={m.user_id || m.email}>
         <div><strong>{m.email || m.user_id}</strong><small>{m.status || 'active'}{m.user_id === authUser?.id ? ' · you' : ''}</small></div>
         {m.role === 'owner' ? <span className="voice-chip">OWNER</span> : <><select aria-label={`Role for ${m.email || m.user_id}`} value={m.role} onChange={e => changeRole(m.user_id, e.target.value)}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select><button type="button" onClick={() => remove(m.user_id)}>Remove</button></>}

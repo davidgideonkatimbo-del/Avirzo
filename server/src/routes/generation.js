@@ -1,4 +1,5 @@
 import { sceneContinuityGuard } from '../services/continuity.js';
+import { buildModelChain, submitWithFallback } from '../services/modelFallback.js';
 
 function normalizeRunwayStatus(raw) {
   const s = String(raw || '').toLowerCase().trim();
@@ -113,21 +114,16 @@ export function registerRoutes(app, ctx) {
       }
 
       // Gen-4.5: image_to_video accepts text-only (omit promptImage) or image+text.
-      const model = pickGenerationModel(await getUserPlan(providerUser.id), Boolean(ref));
-      const body = {
-        model,
-        promptText: String(promptText).slice(0, 1000),
-        ratio,
-        duration: seconds
-      };
-      if (ref) body.promptImage = ref;
-
-      const response = await fetch(`${RUNWAY_API}/image_to_video`, {
-        method: 'POST',
-        headers: runwayHeaders(),
-        body: JSON.stringify(body)
+      const primaryModel = pickGenerationModel(await getUserPlan(providerUser.id), Boolean(ref));
+      const chain = buildModelChain(primaryModel, Boolean(ref));
+      const submitTimeoutMs = Math.max(5000, Number(process.env.PROVIDER_SUBMIT_TIMEOUT_MS || 20000));
+      const { response, data, model, attempts } = await submitWithFallback(chain, async tryModel => {
+        const body = { model: tryModel, promptText: String(promptText).slice(0, 1000), ratio, duration: seconds };
+        if (ref) body.promptImage = ref; // Gen-4.5: text-only is allowed (omit promptImage); gen4_turbo needs the image.
+        const r = await fetch(`${RUNWAY_API}/image_to_video`, { method: 'POST', headers: runwayHeaders(), body: JSON.stringify(body), signal: AbortSignal.timeout(submitTimeoutMs) });
+        return { response: r, data: await r.json().catch(() => ({})) };
       });
-      const data = await response.json().catch(() => ({}));
+      if (attempts.length > 1) console.warn(`generation fallback for job ${job.id}:`, JSON.stringify(attempts));
 
       if (!response.ok) {
         const msg = providerErrorMessage(data, 'The video provider rejected the request.');
@@ -144,7 +140,7 @@ export function registerRoutes(app, ctx) {
         return res.status(502).json({ message: 'Video provider did not return a task id.', jobId: job.id });
       }
 
-      await jobs.update(job.id, { status: 'running', progress: 5, provider_task_id: data.id });
+      await jobs.update(job.id, { status: 'running', progress: 5, provider_task_id: data.id, payload: { ...(job.payload || {}), model, fallbackUsed: model !== primaryModel } });
       return res.status(202).json({
         status: 'queued',
         taskId: data.id,
