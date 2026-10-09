@@ -10,8 +10,8 @@ export function ProjectsPanel({
   authStatus, authLoading,
   handleAuth, handleSignOut,
   projectId, projectName, setProjectName, projectFolder, setProjectFolder, projectFolderFilter, setProjectFolderFilter, projectFolders, visibleProjects,
-  projects, projectStatus, projectLoading,
-  newProject, saveProject, loadProject, deleteProject,
+  projects, projectStatus, projectLoading, lastSavedAt,
+  newProject, saveProject, loadProject, deleteProject, exportFrameworkPack,
   assets, assetStatus, refreshAssets, openAsset, deleteAsset
 }) {
   if (!visible) return null;
@@ -80,6 +80,12 @@ export function ProjectsPanel({
           <label>Show <select value={projectFolderFilter} onChange={e => setProjectFolderFilter(e.target.value)}>{projectFolders.map(folder => <option key={folder} value={folder}>{folder}</option>)}</select></label>
         </div>
         {projectStatus && <div className="heritage-callout">🗂 {projectStatus}</div>}
+        {typeof exportFrameworkPack === 'function' && authUser && (
+          <button type="button" className="ghost-button" onClick={exportFrameworkPack}>Export framework pack</button>
+        )}
+        {lastSavedAt && authUser && (
+          <div className="last-saved-note" role="status">Last saved {new Date(lastSavedAt).toLocaleString()}</div>
+        )}
 
         {supabaseEnabled && authUser && projectId && (
           <div className="asset-panel">

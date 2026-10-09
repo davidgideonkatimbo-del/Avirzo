@@ -55,7 +55,7 @@ function getOnce(url, { timeoutMs, maxBytes }) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { lookup: guardedLookup, headers: { 'User-Agent': 'avirzo/2.1', Accept: '*/*' }, timeout: timeoutMs }, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); return resolve({ redirect: new URL(res.headers.location, url).toString() }); }
-      if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error(`Remote server returned ${res.statusCode}.`)); }
+      if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); const err = new Error(`Remote server returned ${res.statusCode}.`); err.status = res.statusCode; return reject(err); }
       const declared = Number(res.headers['content-length'] || 0);
       if (declared && declared > maxBytes) { res.destroy(); return reject(new Error('Remote file is too large.')); }
       const chunks = []; let total = 0;
@@ -69,12 +69,36 @@ function getOnce(url, { timeoutMs, maxBytes }) {
   });
 }
 
-export async function safeFetchBuffer(input, { maxBytes = 300 * 1024 * 1024, timeoutMs = 30000, maxRedirects = 3 } = {}) {
+// Only transient failures are worth retrying: timeouts, dropped connections, 408, 429 and 5xx.
+// Permanent answers (403, 404, validation/SSRF errors, oversized files) fail immediately.
+export function isRetryable(error) {
+  const msg = String(error?.message || error || '');
+  if (/disallowed|Invalid media|Only HTTPS|credentials|allowlist|too large|Too many redirects/i.test(msg)) return false;
+  const status = Number(error?.status);
+  if (status) return status === 408 || status === 429 || status >= 500;
+  return true;
+}
+
+export async function safeFetchBuffer(input, { maxBytes = 300 * 1024 * 1024, timeoutMs = 30000, maxRedirects = 3, retries = 3 } = {}) {
   let url = assertSafeUrl(input).toString();
-  for (let i = 0; i <= maxRedirects; i++) {
-    const out = await getOnce(url, { timeoutMs, maxBytes });
-    if (out.redirect) { url = assertSafeUrl(out.redirect).toString(); continue; }
-    return out;
+  let lastError;
+  const attempts = Math.max(1, retries);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      let current = url;
+      for (let i = 0; i <= maxRedirects; i++) {
+        const out = await getOnce(current, { timeoutMs, maxBytes });
+        if (out.redirect) { current = assertSafeUrl(out.redirect).toString(); continue; }
+        return out;
+      }
+      throw new Error('Too many redirects.');
+    } catch (error) {
+      lastError = error;
+      if (!isRetryable(error)) throw error;
+      if (attempt >= attempts) break;
+      const delayMs = Math.min(8000, 400 * (2 ** (attempt - 1)));
+      await new Promise(r => setTimeout(r, delayMs));
+    }
   }
-  throw new Error('Too many redirects.');
+  throw lastError || new Error('Media download failed after retries.');
 }

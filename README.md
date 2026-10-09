@@ -2,15 +2,23 @@
 
 Avirzo is an AI filmmaking studio focused on African heritage, history, oral tradition, languages and culturally grounded visual storytelling.
 
-**Current release: v2.9.3 — Billing Portal & Export Provenance** (premium cinematic studio on the durable production job system).
+**Current release: v2.11.0 — Infrastructure, workers, growth loops** (premium cinematic studio on the durable production job system).
 
 ## Current production procedure
 - Keep the web service as the first deployment target.
-- Keep the dedicated `avirzo-worker` disabled until we explicitly approve its paid Render plan.
+- The paid `avirzo-worker` lives in `render.worker.yaml` (not `render.yaml`), so deploying the web Blueprint never creates it. Enable it only after approving its paid Render plan.
 - Generate and commit `package-lock.json` on a networked machine before the final production build.
 - Run `npm ci` and `npm run build` before replacing the live web deployment.
 - Test the first-film and first-scene flow on Android before adding another major feature.
 - Preserve Avirzo's heritage-first African filmmaking identity and the existing project/studio workflow.
+
+## What's new in v2.10.0
+- First-film progress strip in Studio (Story → Storyboard → First scene → Preview).
+- Example first-film paths on Home (oral, documented, vertical heritage).
+- Last-saved timestamps after save, autosave, load, and save-on-sign-out.
+- Clearer sign-out messaging when a new cloud project is created.
+- Boot/wake-up shell in HTML for cold starts; service worker cache v2.10.0.
+- Includes v2.9.9: projects survive sign-out/sign-in with autosave.
 
 ## What's new
 

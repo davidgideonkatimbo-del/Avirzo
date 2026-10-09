@@ -23,7 +23,11 @@ export function registerRoutes(app, ctx) {
     };
     if (!payload.scenes.length) return res.status(400).json({ message: 'At least one rendered scene is required.' });
     if (payload.projectId && !(await requireOwnedProject(exportUser.id, payload.projectId))) return res.status(404).json({ message: 'Project not found.' });
-    if (IS_PRODUCTION && payload.scenes.some(s => !s?.assetId)) return res.status(400).json({ message: 'Every production export scene must reference an archived Avirzo asset.' });
+    const missingMedia = payload.scenes.filter(s => !s?.assetId && !String(s?.videoUrl || '').trim());
+    if (IS_PRODUCTION && missingMedia.length) {
+      return res.status(400).json({ message: 'Every production export scene needs an archived asset or a video URL. Re-generate any scene that has neither.' });
+    }
+    // Prefer archived assets; provider URLs are accepted so a shot can still be exported if archive lagged.
     if (payload.scenes.length > 30) return res.status(413).json({ message: 'Export is limited to 30 scenes per job.' });
     try {
       payload.scenes.forEach(s => { if (!s?.assetId) assertSafeUrl(String(s?.videoUrl || '')); });

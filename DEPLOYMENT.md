@@ -85,7 +85,7 @@ Avirzo v2.1 records video generation, character-performance, and film-export job
 
 ## v2.1 worker deployment
 
-Run the appended v2.1 section of `supabase.sql` before deploying. Render should create both services from `render.yaml`: `avirzo` (web) and `avirzo-worker` (background worker). The worker needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `RUNWAYML_API_SECRET`; the web service keeps the normal public/client and provider environment variables. Production film exports return `202` with a durable job ID and are processed by the worker.
+Run the appended v2.1 section of `supabase.sql` before deploying. Render creates only the `avirzo` web service from `render.yaml`. The paid `avirzo-worker` is defined separately in `render.worker.yaml`; create it from a new Blueprint only after approving the cost. The worker needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `RUNWAYML_API_SECRET`; the web service keeps the normal public/client and provider environment variables. Production film exports return `202` with a durable job ID and are processed by the worker.
 
 The worker includes stale-job recovery: jobs left running with a worker lock for more than 30 minutes can be reclaimed. Failed and canceled jobs can be retried from the Avirzo Production Jobs panel.
 
@@ -146,7 +146,7 @@ The premium billing/provenance changes in v2.9.3 do not change this deployment o
 ## v2.9.3 Render certification checklist
 
 1. Apply the latest `supabase.sql` before deploying the v2.9.3 features.
-2. Create/update both Render services from `render.yaml`: `avirzo` web + `avirzo-worker` background worker.
+2. Create/update the `avirzo` web service from `render.yaml`. Add the worker later from `render.worker.yaml`.
 3. Set the same `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on both services.
 4. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on the web service before the Docker build. Render exposes service environment variables as Docker build arguments, and the Dockerfile consumes these two public values with `ARG`. citeturn0search2
 5. Set `AVIRZO_PUBLIC_URL` to the deployed public URL and `ALLOWED_ORIGINS` to that exact origin if cross-origin requests are ever introduced.

@@ -166,6 +166,15 @@ export function registerRoutes(app, ctx) {
           .maybeSingle();
         if (verifyError) throw verifyError;
         if (!verified) throw new Error('Project write could not be verified after saving.');
+        // Ensure owner membership row exists for collab-aware list queries.
+        try {
+          await supabaseAdmin.from('avirzo_project_members').upsert(
+            { project_id: verified.id, user_id: user.id, role: 'owner' },
+            { onConflict: 'project_id,user_id' }
+          );
+        } catch (memberErr) {
+          console.error('Owner membership upsert failed (non-fatal):', memberErr);
+        }
         return res.status(201).json({ project: publicProject(verified), verified: true });
       }
 

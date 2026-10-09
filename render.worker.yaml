@@ -1,0 +1,47 @@
+# OPTIONAL paid background worker (plan: starter). NOT part of render.yaml on purpose,
+# so a Blueprint sync of the web service never creates a billable service.
+# To enable later: create a new Blueprint in Render pointing at this file (render.worker.yaml),
+# set the secrets, then set AVIRZO_WORKER_ENABLED to "true" on the web service.
+services:
+  - type: worker
+    name: avirzo-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node server/src/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RUNWAYML_API_SECRET
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      - key: AZURE_SPEECH_KEY
+        sync: false
+      - key: AZURE_SPEECH_REGION
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: AVIRZO_PUBLIC_URL
+        sync: false
+      - key: WORKER_MAX_ATTEMPTS
+        value: "3"
+      - key: WORKER_POLL_MS
+        value: "5000"

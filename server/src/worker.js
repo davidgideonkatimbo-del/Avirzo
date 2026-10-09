@@ -32,7 +32,12 @@ async function updateProviderJob(job) {
     const data = await response.json().catch(() => ({}));
     if (response.status === 404) { await jobs.update(job.id, { status: 'failed', progress: 0, error: 'The provider no longer has this task. Please regenerate.' }); return; }
     if (!response.ok) throw new Error(data?.message || 'Provider status request failed.');
-    const status = String(data.status || '').toLowerCase();
+    const status = (() => {
+      const s = String(data.status || '').toLowerCase();
+      if (s === 'cancelled') return 'canceled';
+      if (s === 'success' || s === 'completed') return 'succeeded';
+      return s;
+    })();
     const progress = status === 'succeeded' ? 100 : status === 'failed' || status === 'canceled' ? 0 : status === 'running' ? 60 : status === 'throttled' ? 35 : 15;
     if (status === 'succeeded' && !data.output?.[0]) {
       await jobs.update(job.id, { status: 'failed', progress: 0, error: 'Provider reported success without an output media asset.' });

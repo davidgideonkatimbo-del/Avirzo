@@ -18,10 +18,15 @@ export function createJobService({ supabaseAdmin, requireDurable = false }) {
   if (requireDurable && !durable) throw new Error('Durable job storage is required but Supabase service credentials are missing.');
 
   async function create(input) {
+    // Priority: 1 high (short analysis), 5 normal (generation), 10 low (long export). Lower runs first.
+    const defaultPriority = input.type === 'film_export' ? 10
+      : (input.type === 'video_generation' || input.type === 'character_performance') ? 5
+      : 1;
     const row = {
       user_id: input.userId, project_id: input.projectId || null,
       type: input.type, status: input.status || 'queued', provider_task_id: input.providerTaskId || null,
-      progress: input.progress || 0, result_asset_id: null, error: null, payload: input.payload || null
+      progress: input.progress || 0, result_asset_id: null, error: null, payload: input.payload || null,
+      priority: Number.isFinite(input.priority) ? input.priority : defaultPriority
     };
     if (durable) {
       const { data, error } = await supabaseAdmin.from('avirzo_jobs').insert(row).select().single();
@@ -115,13 +120,14 @@ export function createJobService({ supabaseAdmin, requireDurable = false }) {
   }
 
   async function findByProviderTask(userId, taskId) {
+    // Include payload so generation can recover providerVideoUrl after archive lag.
     if (durable) {
-      const { data, error } = await supabaseAdmin.from('avirzo_jobs').select(PUBLIC_JOB_COLUMNS).eq('user_id', userId).eq('provider_task_id', String(taskId)).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabaseAdmin.from('avirzo_jobs').select('*').eq('user_id', userId).eq('provider_task_id', String(taskId)).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (!error) return data || null;
       if (requireDurable) throw error;
     }
     const local = [...memoryJobs.values()].find(x => x.user_id === userId && String(x.provider_task_id) === String(taskId));
-    return local ? publicJob(local) : null;
+    return local || null; // full local row (payload intact) for internal generation polling
   }
 
   async function queueDepth() {

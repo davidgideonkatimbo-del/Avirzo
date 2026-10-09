@@ -22,8 +22,10 @@ function compactCharacterLine(c){return `${c.name||'Unnamed'} — community ${c.
 export function sceneContinuityGuard({scene={}, characters=[], worldBible={}, rootsFoundation={}, era='pre1994'}){
  const text=String(scene.prompt||scene.description||scene.storyBeat||'').trim();
  const warnings=[]; const blockers=[];
- const primary=characters.find(c=>c.id===scene.primaryCharacterId) || null;
- if(characters.length && !primary) blockers.push(`Scene ${scene.number||'?'} has no primary character assigned.`);
+ const primary=characters.find(c=>c.id===scene.primaryCharacterId) || characters[0] || null;
+ if(characters.length && !characters.find(c=>c.id===scene.primaryCharacterId) && primary){
+  warnings.push(`Scene ${scene.number||'?'} had no primary character assigned — using ${primary.name||'the first character'} for continuity.`);
+ }
  const period=String(rootsFoundation.period||'').toLowerCase();
  if(isPre1994Setting(era,period) && findAnachronisms(text).length) blockers.push(`Scene ${scene.number||'?'} contains a possible modern/anachronistic reference for the selected period: ${findAnachronisms(text).slice(0,4).join(', ')}. Edit the scene text or change the period if this is intentional.`);
  if(primary){

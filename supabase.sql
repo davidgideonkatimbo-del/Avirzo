@@ -456,3 +456,99 @@ alter table public.avirzo_billing_events enable row level security;
 revoke all on public.avirzo_billing_events from anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- =====================================================================
+-- v2.10.4 performance indexes + job priority (safe to re-run)
+-- =====================================================================
+
+-- Projects: list-by-owner is the hottest path after sign-in
+create index if not exists avirzo_projects_user_updated_idx
+  on public.avirzo_projects(user_id, updated_at desc);
+
+-- Assets: provider task dedupe + kind filters
+create index if not exists avirzo_assets_provider_task_idx
+  on public.avirzo_assets(provider_task_id)
+  where provider_task_id is not null;
+create index if not exists avirzo_assets_project_kind_idx
+  on public.avirzo_assets(project_id, kind, created_at desc)
+  where project_id is not null;
+
+-- Members / invites: collab lookups
+create index if not exists avirzo_project_members_project_idx
+  on public.avirzo_project_members(project_id);
+create index if not exists avirzo_project_invites_token_idx
+  on public.avirzo_project_invites(token)
+  where token is not null and status = 'pending';
+create index if not exists avirzo_project_invites_email_status_idx
+  on public.avirzo_project_invites(lower(email), status);
+
+-- Comments / approvals: scene board queries
+create index if not exists avirzo_comments_scene_idx
+  on public.avirzo_project_comments(project_id, scene_id)
+  where scene_id is not null;
+
+-- Usage counters: plan limits
+create index if not exists avirzo_usage_counters_user_kind_idx
+  on public.avirzo_usage_counters(user_id, kind);
+
+-- Job priority: 1 = high (analysis), 5 = normal (generation), 10 = low (long export)
+alter table public.avirzo_jobs add column if not exists priority integer not null default 5;
+create index if not exists avirzo_jobs_priority_queue_idx
+  on public.avirzo_jobs(status, priority, created_at)
+  where status in ('queued', 'running');
+
+-- Claim next job by priority (with aging) then age. Keeps the 30-minute stale-worker recovery and
+-- re-applies the service-role-only grants, because dropping a function resets its privileges.
+drop function if exists public.claim_avirzo_job(text[]);
+create function public.claim_avirzo_job(requested_types text[])
+returns setof public.avirzo_jobs
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare claimed public.avirzo_jobs;
+begin
+  -- Recover jobs whose worker vanished (lock not renewed for 30 minutes).
+  update public.avirzo_jobs
+  set status = case when attempts >= 3 then 'dead_letter' else 'queued' end,
+      locked_at = null, worker_id = null,
+      error = case when attempts >= 3 then 'Maximum worker attempts reached.' else error end,
+      updated_at = now()
+  where status = 'running'
+    and (requested_types is null or cardinality(requested_types) = 0 or type = any(requested_types))
+    and locked_at is not null
+    and locked_at < now() - interval '30 minutes';
+
+  select * into claimed
+  from public.avirzo_jobs j
+  where j.status = 'queued'
+    and (requested_types is null or cardinality(requested_types) = 0 or j.type = any(requested_types))
+  -- Aging: every 5 minutes of waiting is worth one priority step, so low-priority exports are never starved.
+  order by (j.priority - floor(extract(epoch from (now() - j.created_at)) / 300)) asc, j.created_at asc
+  for update skip locked
+  limit 1;
+
+  if claimed.id is null then
+    return;
+  end if;
+
+  update public.avirzo_jobs
+  set status = 'running', progress = greatest(progress, 1), attempts = coalesce(attempts, 0) + 1,
+      locked_at = now(), worker_id = concat('worker-', gen_random_uuid()::text), updated_at = now()
+  where id = claimed.id
+  returning * into claimed;
+
+  return next claimed;
+end;
+$$;
+
+revoke execute on function public.claim_avirzo_job(text[]) from public, anon, authenticated;
+grant execute on function public.claim_avirzo_job(text[]) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- =====================================================================
+-- v2.11.1 invite expiry (safe to re-run). Existing pending invites get 7 days from this migration.
+-- =====================================================================
+alter table public.avirzo_project_invites add column if not exists expires_at timestamptz default (now() + interval '7 days');
+notify pgrst, 'reload schema';

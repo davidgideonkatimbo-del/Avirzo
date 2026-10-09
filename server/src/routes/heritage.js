@@ -55,4 +55,57 @@ app.post('/api/storyboard', (req, res) => {
 });
 
 app.get('/api/heritage-bible/template', (req, res) => res.json({ fields: ['name','role','age','community','clan','language','appearance','clothing','occupation','relationships','notes','voiceId','voiceNotes'], principle: 'Define characters once and carry the profile into every scene.' }));
+
+  // Export a shareable heritage framework pack (organic growth loop).
+  app.post('/api/heritage/template-pack', (req, res) => {
+    const body = req.body || {};
+    const pack = {
+      avirzoTemplatePack: 1,
+      name: String(body.name || 'Custom Avirzo framework').slice(0, 120),
+      description: String(body.description || '').slice(0, 500),
+      createdAt: new Date().toISOString(),
+      africanProfile: body.africanProfile || 'uganda-en',
+      era: body.era || 'pre1994',
+      storyType: body.storyType || 'inspired',
+      style: body.style || 'Cinematic',
+      camera: body.camera || 'Slow dolly',
+      format: body.format || '16:9',
+      duration: body.duration || '5 sec',
+      story: String(body.story || '').slice(0, 8000),
+      historicalNotes: String(body.historicalNotes || '').slice(0, 6000),
+      research: body.research && typeof body.research === 'object' ? body.research : {},
+      worldBible: body.worldBible && typeof body.worldBible === 'object' ? body.worldBible : {},
+      rootsFoundation: body.rootsFoundation && typeof body.rootsFoundation === 'object' ? body.rootsFoundation : {},
+      characters: Array.isArray(body.characters) ? body.characters.slice(0, 40) : []
+    };
+    res.json({ pack, message: 'Share this pack JSON. Others can import it in Studio → Templates.' });
+  });
+
+  app.post('/api/heritage/template-pack/import', (req, res) => {
+    const pack = req.body?.pack || req.body || {};
+    if (!pack || (pack.avirzoTemplatePack !== 1 && !pack.story && !pack.africanProfile)) {
+      return res.status(400).json({ message: 'Not a valid Avirzo template pack.' });
+    }
+    const template = {
+      id: 'imported-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      title: String(pack.name || 'Imported framework').slice(0, 120),
+      eyebrow: 'IMPORTED',
+      description: String(pack.description || 'Shared heritage framework').slice(0, 300),
+      africanProfile: pack.africanProfile || 'uganda-en',
+      era: pack.era || 'pre1994',
+      storyType: pack.storyType || 'inspired',
+      style: pack.style || 'Cinematic',
+      camera: pack.camera || 'Slow dolly',
+      format: pack.format || '16:9',
+      duration: pack.duration || '5 sec',
+      story: String(pack.story || '').slice(0, 8000),
+      historicalNotes: String(pack.historicalNotes || '').slice(0, 6000),
+      research: pack.research && typeof pack.research === 'object' && !Array.isArray(pack.research) ? pack.research : {},
+      worldBible: pack.worldBible && typeof pack.worldBible === 'object' && !Array.isArray(pack.worldBible) ? pack.worldBible : {},
+      rootsFoundation: pack.rootsFoundation && typeof pack.rootsFoundation === 'object' && !Array.isArray(pack.rootsFoundation) ? pack.rootsFoundation : {},
+      characters: Array.isArray(pack.characters) ? pack.characters.slice(0, 40) : []
+    };
+    res.json({ template, message: 'Template pack ready to apply in Studio.' });
+  });
+
 }

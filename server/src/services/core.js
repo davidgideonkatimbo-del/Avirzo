@@ -1,3 +1,5 @@
+import { envInt, scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, freeTrialStart, TRIAL_GATED_KINDS } from './plans.js';
+export { scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, TRIAL_GATED_KINDS };
 import { safeFetchBuffer } from './safeFetch.js';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +10,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 export const HOST = process.env.HOST || '0.0.0.0';
 export const RUNWAY_API = 'https://api.dev.runwayml.com/v1';
 export const RUNWAY_VERSION = '2024-11-06';
-export const APP_VERSION = '2.9.6';
+export const APP_VERSION = '2.11.0';
 export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -104,13 +106,14 @@ let exportBusy = false;
 }
 export const RATE_LIMITS = {
   // Video generation is an account-level annual credit budget.
-  generation: { windowMs: 365 * 24 * 60 * 60 * 1000, max: 20, window: 'year' },
+  // Yearly video-generation budget per account. Defaults: 5 free clips for the free month, then 60 (Creator) / 200 (Studio) per year;
+  // set FREE_GENERATIONS_PER_YEAR (and optionally CREATOR_/STUDIO_) in Render to change them without a code edit.
+  generation: { windowMs: 365 * 24 * 60 * 60 * 1000, max: envInt('FREE_GENERATIONS_PER_YEAR', 5), window: 'year', perPlan: { free: envInt('FREE_GENERATIONS_PER_YEAR', 5), creator: envInt('CREATOR_GENERATIONS_PER_YEAR', 60), studio: envInt('STUDIO_GENERATIONS_PER_YEAR', 200) } },
   voice: { windowMs: 60 * 60 * 1000, max: 20 },
   export: { windowMs: 60 * 60 * 1000, max: 5 },
   performance: { windowMs: 60 * 60 * 1000, max: 10 }
 };
 // Hourly quota multipliers per plan (product decision: adjust here). Applied to the base RATE_LIMITS.
-export const PLAN_LIMIT_MULTIPLIER = { free: 1, creator: 3, studio: 10 };
 export const WORKER_ENABLED = String(process.env.AVIRZO_WORKER_ENABLED || '').toLowerCase() === 'true';
 const planCache = new Map();
 export async function getUserPlan(userId) {
@@ -124,8 +127,10 @@ export async function getUserPlan(userId) {
     return plan;
   } catch { return 'free'; } // if the plan cannot be read, fall back to the safest (free) limits
 }
-export function scaledLimit(limit, plan) { return { ...limit, max: Math.max(1, Math.round(limit.max * (PLAN_LIMIT_MULTIPLIER[plan] || 1))) }; }
-function usageWindowStart(kind, date = new Date()) {
+// Free accounts' clip budget is counted from the start of their free month, so it can never reset on 1 January mid-trial
+// (and the same window is used when showing usage). Everyone else keeps the calendar-year window.
+export function usageWindowStart(kind, date = new Date(), { plan, createdAt } = {}) {
+  if (kind === 'generation' && plan === 'free' && freeTrialStatus({ createdAt, plan }).applies) return new Date(freeTrialStart(createdAt));
   const start = new Date(date);
   if (RATE_LIMITS[kind]?.window === 'year') {
     start.setUTCMonth(0, 1);
@@ -155,10 +160,10 @@ export function rateLimit(key, limit) {
   return { allowed: true };
 }
 
-export async function durableUsageLimit(userId, kind, limit) {
+export async function durableUsageLimit(userId, kind, limit, who = {}) {
   if (!IS_PRODUCTION || !supabaseAdmin) return rateLimit(`${kind}:${userId}`, limit);
   const now = new Date();
-  const windowStart = usageWindowStart(kind, now);
+  const windowStart = usageWindowStart(kind, now, who);
   const { data, error } = await supabaseAdmin.rpc('consume_avirzo_usage', {
     p_user_id: userId, p_kind: kind, p_window_start: windowStart.toISOString(), p_limit: limit.max
   });
@@ -179,9 +184,17 @@ export async function durableUsageLimit(userId, kind, limit) {
     return null;
   }
   const baseLimit = RATE_LIMITS[kind];
+  const plan = await getUserPlan(user.id);
+  if (TRIAL_GATED_KINDS.includes(kind)) {
+    const trial = freeTrialStatus({ createdAt: user.created_at, plan });
+    if (trial.expired) {
+      res.status(402).json({ error: 'TRIAL_ENDED', message: 'Your free month has ended. Choose Creator or Studio in Billing to keep generating, voicing and animating. Your projects stay safe and you can still open and export them.', trialEndedAt: trial.endsAt });
+      return null;
+    }
+  }
   if (baseLimit) {
-    const limit = scaledLimit(baseLimit, await getUserPlan(user.id));
-    const result = await durableUsageLimit(user.id, kind, limit);
+    const limit = scaledLimit(baseLimit, plan);
+    const result = await durableUsageLimit(user.id, kind, limit, { plan, createdAt: user.created_at });
     if (result.infrastructureError) {
       res.status(503).json({ error: 'USAGE_LIMIT_UNAVAILABLE', message: 'Usage protection is temporarily unavailable. Please try again shortly.' });
       return null;
@@ -290,7 +303,7 @@ export async function persistRemoteAsset({user, projectId, sourceUrl, kind='vide
   if(!supabaseAdmin) throw new Error('Cloud asset storage is not configured.');
   const taskKey = providerTaskId ? String(providerTaskId).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80) : '';
   if(taskKey){ const existing=await findAssetByTask(user.id, taskKey); if(existing) return existing; }
-  const fetched=await safeFetchBuffer(sourceUrl,{maxBytes:300*1024*1024,timeoutMs:30000});
+  const fetched=await safeFetchBuffer(sourceUrl,{maxBytes:300*1024*1024,timeoutMs:120000});
   if(!fetched.buffer?.length) throw new Error('Provider returned an empty media file.');
   const contentType=(fetched.contentType||'').split(';')[0].trim() || (kind==='video'?'video/mp4':kind==='audio'?'audio/mpeg':'application/octet-stream');
   const ext=contentType.includes('mp4')?'mp4':contentType.includes('mpeg')||contentType.includes('mp3')?'mp3':contentType.includes('webm')?'webm':contentType.includes('png')?'png':contentType.includes('jpeg')?'jpg':'bin';
@@ -352,3 +365,4 @@ export function toSrtTime(seconds) {
   const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); const s = Math.floor((ms % 60000) / 1000); const milli = ms % 1000;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(milli).padStart(3,'0')}`;
 }
+

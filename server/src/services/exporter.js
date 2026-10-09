@@ -55,11 +55,12 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
   const countBytes = n => { totalBytes += n; if (totalBytes > MAX_TOTAL_BYTES) throw new Error('Export media is too large to process (disk limit reached).'); };
   if (!scenes.length) throw new Error('At least one rendered scene is required.');
   if (scenes.length > 30) throw new Error('Export is limited to 30 scenes per job.');
-  if (IS_PRODUCTION) {
-    if (!supabaseAdmin) throw new Error('Production exports require Supabase Storage.');
-    for (const scene of scenes) if (!scene?.assetId) throw new Error('Production export scenes must reference archived assets.');
-  } else {
-    scenes.forEach(s => assertSafeUrl(String(s?.videoUrl || '')));
+  if (IS_PRODUCTION && !supabaseAdmin) throw new Error('Production exports require Supabase Storage.');
+  for (const scene of scenes) {
+    if (scene?.assetId) continue;
+    const url = String(scene?.videoUrl || '').trim();
+    if (!url) throw new Error('Every export scene needs an archived asset or a video URL. Re-generate any missing scene.');
+    assertSafeUrl(url);
   }
   const MAX_EXPORT_DURATION_SECONDS = 15 * 60;
   const ensureActive = async () => { if (await isCanceled()) throw new Error('Export canceled by user.'); };

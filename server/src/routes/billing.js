@@ -3,7 +3,7 @@ import express from 'express';
 function expressRaw(){ return express.raw({type:'application/json'}); }
 
 export function registerRoutes(app, ctx) {
-  const { supabaseAdmin, requireCloudUser, RATE_LIMITS, getUserPlan, scaledLimit } = ctx;
+  const { supabaseAdmin, requireCloudUser, RATE_LIMITS, getUserPlan, scaledLimit, freeTrialStatus, usageWindowStart } = ctx;
   const plans = { free:{id:'free',name:'Free'}, creator:{id:'creator',name:'Creator'}, studio:{id:'studio',name:'Studio'} };
 
 
@@ -100,11 +100,14 @@ export function registerRoutes(app, ctx) {
       if (!supabaseAdmin) return res.json({plan:plans.free,billing:{status:'local'},usage:{}});
       const {data:account} = await supabaseAdmin.from('avirzo_billing_accounts').select('plan,status,current_period_end,provider_customer_id').eq('user_id',user.id).maybeSingle();
       const plan = plans[await getUserPlan(user.id)] || plans.free;
-      const now = new Date(); now.setUTCMinutes(0,0,0); const start = now.toISOString();
-      const {data:counters,error} = await supabaseAdmin.from('avirzo_usage_counters').select('kind,count').eq('user_id',user.id).eq('window_start',start);
+      const effectivePlan = await getUserPlan(user.id);
+      // Each kind has its own window (hourly, or yearly/free-month for generation), so look each one up with its own start.
+      const starts = {}; for (const kind of Object.keys(RATE_LIMITS)) starts[kind] = usageWindowStart(kind, new Date(), { plan: effectivePlan, createdAt: user.created_at }).toISOString();
+      const {data:counters,error} = await supabaseAdmin.from('avirzo_usage_counters').select('kind,count,window_start').eq('user_id',user.id).in('window_start',[...new Set(Object.values(starts))]);
       if(error) throw error;
-      const effectivePlan = await getUserPlan(user.id); const usage = {}; for(const [kind,base] of Object.entries(RATE_LIMITS)) usage[kind] = {used:(counters||[]).find(x=>x.kind===kind)?.count||0,limit:scaledLimit(base,effectivePlan).max};
-      return res.json({plan,billing:{status:account?.status||'active',current_period_end:account?.current_period_end||null,can_manage:Boolean(account?.provider_customer_id && process.env.STRIPE_SECRET_KEY)},usage});
+      const usage = {}; for(const [kind,base] of Object.entries(RATE_LIMITS)) usage[kind] = {used:(counters||[]).find(x=>x.kind===kind && new Date(x.window_start).toISOString()===starts[kind])?.count||0,limit:scaledLimit(base,effectivePlan).max};
+      const trial = freeTrialStatus({ createdAt: user.created_at, plan: effectivePlan });
+      return res.json({plan,trial,billing:{status:account?.status||'active',current_period_end:account?.current_period_end||null,can_manage:Boolean(account?.provider_customer_id && process.env.STRIPE_SECRET_KEY)},usage});
     } catch(e) { res.status(500).json({message:e.message || 'Could not load billing summary.'}); }
   });
 
