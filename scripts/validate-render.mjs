@@ -44,15 +44,15 @@ for (const [name, re] of required) {
 }
 
 for (const [name, version] of [['root', pkg.version], ['client', clientPkg.version], ['server', serverPkg.version]]) {
-  if (version !== '2.9.3') { console.error(`FAIL: ${name} package version is ${version}, expected 2.9.3`); failed = true; }
-  else console.log(`PASS: ${name} package version 2.9.3`);
+  if (version !== '2.9.6') { console.error(FAIL: ${name} package version is ${version}, expected 2.9.6); failed = true; }
+else console.log(PASS: ${name} package version 2.9.6);
 }
-if (!core.includes("APP_VERSION = '2.9.3'")) { console.error('FAIL: server APP_VERSION'); failed = true; }
-else console.log('PASS: server APP_VERSION 2.9.3');
+if (!core.includes("APP_VERSION = '2.9.6'")) { console.error('FAIL: server APP_VERSION'); failed = true; }
+else console.log('PASS: server APP_VERSION 2.9.6');
 if (!system.includes('res.json({')) { console.error('FAIL: health endpoint'); failed = true; }
 else console.log('PASS: health endpoint present');
 if (fs.existsSync(path.join(root, 'package-lock.json'))) console.log('PASS: package-lock.json present');
 else console.warn('WARN: package-lock.json missing; generate it on a networked machine and switch Docker/CI to strict npm ci.');
 
 if (failed) process.exit(1);
-console.log('Render static certification checks passed for Avirzo v2.9.3.');
+console.log('Render static certification checks passed for Avirzo v2.9.6.');
