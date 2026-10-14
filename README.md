@@ -1,8 +1,8 @@
 # Avirzo — African Cinema Studio
 
-Avirzo is an AI filmmaking studio focused on African heritage, history, oral tradition, languages and culturally grounded visual storytelling.
+Avirzo is an AI filmmaking studio for **African heritage, history, oral tradition, languages, and culturally grounded visual storytelling** — built so African stories can be made with care and shown to the world.
 
-**Current release: v2.11.0 — Infrastructure, workers, growth loops** (premium cinematic studio on the durable production job system).
+**Current release: v2.11.1** — heritage templates across more regions, first-film path, community/classroom packs, subscription-included monthly production credits (cost-capped), and feature-scale sequences (up to 200 scenes / 90 min assembled on Studio).
 
 ## Current production procedure
 - Keep the web service as the first deployment target.

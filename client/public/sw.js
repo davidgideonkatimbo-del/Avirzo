@@ -1,5 +1,6 @@
 // Bump CACHE with every release so old shells, icons and manifests are replaced.
-const CACHE = 'avirzo-static-v2.11.0';
+// Phase C: heritage templates ship in the client JS bundle; after first online load they work offline with the cached shell.
+const CACHE = 'avirzo-static-v2.11.1';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {

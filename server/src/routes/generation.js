@@ -1,5 +1,4 @@
 import { sceneContinuityGuard } from '../services/continuity.js';
-import { buildModelChain, submitWithFallback } from '../services/modelFallback.js';
 
 function normalizeRunwayStatus(raw) {
   const s = String(raw || '').toLowerCase().trim();
@@ -38,7 +37,7 @@ export function registerRoutes(app, ctx) {
   const {
     IS_PRODUCTION, supabaseAdmin, africanProfiles, RUNWAY_API, eras, storyTypes, styles, cameras, formats, durations,
     requireProviderUser, requireProviderAuth, requireRunwayKey, runwayHeaders, buildCinematicPrompt,
-    archiveProviderOutput, requireOwnedProject, jobs, getUserPlan, pickGenerationModel
+    archiveProviderOutput, requireOwnedProject, jobs, getUserPlan, pickGenerationModel, addCredits
   } = ctx;
 
   app.post('/api/generate', async (req, res) => {
@@ -77,20 +76,41 @@ export function registerRoutes(app, ctx) {
     }
 
     const serverContinuity = [continuityContext, guard.continuityContext].filter(Boolean).join(' | ').slice(0, 900);
-    const providerUser = await requireProviderUser(req, res, 'generation');
-    if (!providerUser) return;
-
     const seconds = mapDurationSeconds(duration);
     const ratio = mapRatio(format);
     const ref = String(referenceImage || '').trim();
+    // Validate cheap checks before debiting production credits.
     if (ref && !/^https:\/\//i.test(ref) && !/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(ref)) {
       return res.status(400).json({ message: 'Reference image must be an HTTPS image URL or a supported image data URL.' });
+    }
+    const promptText = buildCinematicPrompt({
+      prompt, style, camera, sceneNumber, africanProfile: profile, era, storyType,
+      historicalNotes, characters, researchBrief, referenceCharacter,
+      continuityContext: serverContinuity, worldBible
+    });
+    if (!promptText?.trim()) {
+      return res.status(400).json({ message: 'Could not build a usable video prompt from this scene.' });
+    }
+
+    // Creator-funded: charge production credits equal to generated seconds (fail closed).
+    const providerUser = await requireProviderUser(req, res, 'generation', seconds);
+    if (!providerUser) return;
+    const charged = Number(providerUser._creditsCharged) || 0;
+
+    async function refundCredits(why) {
+      if (!charged || !addCredits || providerUser.id === 'development-user') return;
+      try {
+        await addCredits(providerUser.id, charged, `refund:${why}`.slice(0, 80), { kind: 'generation', seconds, why });
+      } catch (e) {
+        console.error('credit refund failed:', e);
+      }
     }
 
     let job = null;
     try {
       const projectId = req.body?.projectId || null;
       if (projectId && !(await requireOwnedProject(providerUser.id, projectId))) {
+        await refundCredits('project_not_found');
         return res.status(404).json({ message: 'Project not found.' });
       }
 
@@ -99,53 +119,50 @@ export function registerRoutes(app, ctx) {
         projectId,
         type: 'video_generation',
         status: 'queued',
-        payload: { sceneNumber, format, duration: seconds, style, camera }
+        payload: { sceneNumber, format, duration: seconds, style, camera, creditsCharged: charged }
       });
 
-      const promptText = buildCinematicPrompt({
-        prompt, style, camera, sceneNumber, africanProfile: profile, era, storyType,
-        historicalNotes, characters, researchBrief, referenceCharacter,
-        continuityContext: serverContinuity, worldBible
-      });
+      const model = pickGenerationModel(await getUserPlan(providerUser.id), Boolean(ref));
+      const body = {
+        model,
+        promptText: String(promptText).slice(0, 1000),
+        ratio,
+        duration: seconds
+      };
+      if (ref) body.promptImage = ref;
 
-      if (!promptText?.trim()) {
-        await jobs.update(job.id, { status: 'failed', progress: 0, error: 'Empty prompt after processing.' });
-        return res.status(400).json({ message: 'Could not build a usable video prompt from this scene.', jobId: job.id });
-      }
-
-      // Gen-4.5: image_to_video accepts text-only (omit promptImage) or image+text.
-      const primaryModel = pickGenerationModel(await getUserPlan(providerUser.id), Boolean(ref));
-      const chain = buildModelChain(primaryModel, Boolean(ref));
-      const submitTimeoutMs = Math.max(5000, Number(process.env.PROVIDER_SUBMIT_TIMEOUT_MS || 20000));
-      const { response, data, model, attempts } = await submitWithFallback(chain, async tryModel => {
-        const body = { model: tryModel, promptText: String(promptText).slice(0, 1000), ratio, duration: seconds };
-        if (ref) body.promptImage = ref; // Gen-4.5: text-only is allowed (omit promptImage); gen4_turbo needs the image.
-        const r = await fetch(`${RUNWAY_API}/image_to_video`, { method: 'POST', headers: runwayHeaders(), body: JSON.stringify(body), signal: AbortSignal.timeout(submitTimeoutMs) });
-        return { response: r, data: await r.json().catch(() => ({})) };
+      const response = await fetch(`${RUNWAY_API}/image_to_video`, {
+        method: 'POST',
+        headers: runwayHeaders(),
+        body: JSON.stringify(body)
       });
-      if (attempts.length > 1) console.warn(`generation fallback for job ${job.id}:`, JSON.stringify(attempts));
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         const msg = providerErrorMessage(data, 'The video provider rejected the request.');
         await jobs.update(job.id, { status: 'failed', progress: 0, error: msg });
+        await refundCredits('provider_rejected');
         return res.status(response.status >= 400 && response.status < 600 ? response.status : 502).json({
           message: msg,
           details: data,
-          jobId: job.id
+          jobId: job.id,
+          creditsRefunded: charged || undefined
         });
       }
 
       if (!data?.id) {
         await jobs.update(job.id, { status: 'failed', progress: 0, error: 'Provider did not return a task id.' });
-        return res.status(502).json({ message: 'Video provider did not return a task id.', jobId: job.id });
+        await refundCredits('no_task_id');
+        return res.status(502).json({ message: 'Video provider did not return a task id.', jobId: job.id, creditsRefunded: charged || undefined });
       }
 
-      await jobs.update(job.id, { status: 'running', progress: 5, provider_task_id: data.id, payload: { ...(job.payload || {}), model, fallbackUsed: model !== primaryModel } });
+      await jobs.update(job.id, { status: 'running', progress: 5, provider_task_id: data.id });
       return res.status(202).json({
         status: 'queued',
         taskId: data.id,
         jobId: job.id,
         message: 'Your cinematic scene is rendering.',
+        creditsCharged: charged || undefined,
         settings: {
           style, camera, duration, format, sceneNumber,
           africanProfile: africanProfile,
@@ -158,13 +175,15 @@ export function registerRoutes(app, ctx) {
       });
     } catch (error) {
       console.error('generation start failed:', error);
+      await refundCredits('start_exception');
       if (job?.id) {
         try { await jobs.update(job.id, { status: 'failed', progress: 0, error: error?.message || 'Provider request failed.' }); }
         catch (jobError) { console.error('Could not mark provider job failed:', jobError); }
       }
       return res.status(502).json({
         message: error?.message || 'Could not reach the video generation service.',
-        jobId: job?.id || null
+        jobId: job?.id || null,
+        creditsRefunded: charged || undefined
       });
     }
   });

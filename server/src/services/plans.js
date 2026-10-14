@@ -29,3 +29,27 @@ export function freeTrialStatus({ createdAt, plan, now = Date.now(), env = proce
   const end = start + days * 86400000;
   return { applies: true, expired: now >= end, endsAt: new Date(end).toISOString(), daysLeft: Math.max(0, Math.ceil((end - now) / 86400000)) };
 }
+
+// ---- Feature / long-form limits (scene count & assembled duration). Per-clip stays 5–10s (provider).
+// Sequence length = scenes × clip duration. Monthly credits still bound generation cost.
+export function maxStoryboardScenes(plan, env = process.env) {
+  const p = String(plan || 'free');
+  if (p === 'studio') return envInt('STUDIO_MAX_STORYBOARD_SCENES', 200, env);
+  if (p === 'creator') return envInt('CREATOR_MAX_STORYBOARD_SCENES', 80, env);
+  return envInt('FREE_MAX_STORYBOARD_SCENES', 24, env);
+}
+
+export function maxExportScenes(plan, env = process.env) {
+  const p = String(plan || 'free');
+  if (p === 'studio') return envInt('STUDIO_MAX_EXPORT_SCENES', 200, env);
+  if (p === 'creator') return envInt('CREATOR_MAX_EXPORT_SCENES', 80, env);
+  return envInt('FREE_MAX_EXPORT_SCENES', 24, env);
+}
+
+/** Max assembled film length in seconds by plan (feature path for Studio). */
+export function maxExportDurationSeconds(plan, env = process.env) {
+  const p = String(plan || 'free');
+  if (p === 'studio') return envInt('STUDIO_MAX_EXPORT_SECONDS', 90 * 60, env); // 90 min
+  if (p === 'creator') return envInt('CREATOR_MAX_EXPORT_SECONDS', 45 * 60, env); // 45 min
+  return envInt('FREE_MAX_EXPORT_SECONDS', 15 * 60, env); // 15 min
+}

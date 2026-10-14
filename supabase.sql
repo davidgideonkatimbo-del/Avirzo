@@ -554,35 +554,138 @@ alter table public.avirzo_project_invites add column if not exists expires_at ti
 notify pgrst, 'reload schema';
 
 -- =====================================================================
--- v2.12 live collaboration (safe to re-run).
--- The client joins PRIVATE Realtime channels named  avirzo:project:<project uuid>  (Broadcast for field patches, Presence for who is online).
--- These policies make Postgres decide who may join and who may write, using the same role function as the tables:
---   * any project member (owner/editor/commenter/viewer) can receive broadcasts and appear in presence
---   * only owner/editor can SEND field patches; viewers and commenters cannot push edits into other people's screens
--- Isolation: this block only ADDS two avirzo_-named policies on realtime.messages (policies are OR-ed, and these match only
--- topics that start with "avirzo:project:"), plus one avirzo_-named function. It does not alter, drop or restrict anything
--- used by your other apps. It does NOT change any Realtime dashboard setting.
+-- v2.11.0 Phase D — production credit wallet (creator-funded generation)
+-- Safe to re-run. Service-role only for mutations.
 -- =====================================================================
-create or replace function public.avirzo_topic_project_id(p_topic text)
-returns uuid
-language sql
-immutable
+create table if not exists public.avirzo_credit_balances (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  balance integer not null default 0 check (balance >= 0),
+  updated_at timestamptz not null default now()
+);
+alter table public.avirzo_credit_balances enable row level security;
+drop policy if exists "avirzo_credit_balances_select_own" on public.avirzo_credit_balances;
+create policy "avirzo_credit_balances_select_own" on public.avirzo_credit_balances
+  for select to authenticated using (auth.uid() = user_id);
+revoke insert, update, delete on public.avirzo_credit_balances from anon, authenticated;
+grant select on public.avirzo_credit_balances to authenticated;
+
+create table if not exists public.avirzo_credit_ledger (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  delta integer not null,
+  balance_after integer not null,
+  reason text not null,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists avirzo_credit_ledger_user_created_idx
+  on public.avirzo_credit_ledger(user_id, created_at desc);
+alter table public.avirzo_credit_ledger enable row level security;
+drop policy if exists "avirzo_credit_ledger_select_own" on public.avirzo_credit_ledger;
+create policy "avirzo_credit_ledger_select_own" on public.avirzo_credit_ledger
+  for select to authenticated using (auth.uid() = user_id);
+revoke insert, update, delete on public.avirzo_credit_ledger from anon, authenticated;
+grant select on public.avirzo_credit_ledger to authenticated;
+
+-- Idempotent grant marker (e.g. free included credits once)
+create unique index if not exists avirzo_credit_ledger_unique_grant
+  on public.avirzo_credit_ledger(user_id, reason)
+  where reason in ('included_grant', 'signup_grant');
+
+drop function if exists public.add_avirzo_credits(uuid, integer, text, jsonb);
+create function public.add_avirzo_credits(
+  p_user_id uuid,
+  p_amount integer,
+  p_reason text,
+  p_meta jsonb default '{}'::jsonb
+)
+returns table(ok boolean, balance integer, message text)
+language plpgsql
+security definer
+set search_path = public
 as $$
-  select case when p_topic ~ '^avirzo:project:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    then split_part(p_topic, ':', 3)::uuid end;
+declare
+  new_bal integer;
+  reason_text text := coalesce(nullif(trim(p_reason), ''), 'credit');
+begin
+  if p_amount is null or p_amount <= 0 then
+    return query select false, coalesce((select b.balance from public.avirzo_credit_balances b where b.user_id = p_user_id), 0), 'Amount must be positive';
+    return;
+  end if;
+  -- Idempotent one-time grants (included_grant / signup_grant)
+  if reason_text in ('included_grant', 'signup_grant') then
+    if exists (select 1 from public.avirzo_credit_ledger l where l.user_id = p_user_id and l.reason = reason_text) then
+      return query select true, coalesce((select b.balance from public.avirzo_credit_balances b where b.user_id = p_user_id), 0), 'already_granted';
+      return;
+    end if;
+  end if;
+  -- Idempotent Stripe pack by full reason (stripe_pack:<event_id>)
+  if reason_text like 'stripe_pack:%' then
+    if exists (select 1 from public.avirzo_credit_ledger l where l.user_id = p_user_id and l.reason = reason_text) then
+      return query select true, coalesce((select b.balance from public.avirzo_credit_balances b where b.user_id = p_user_id), 0), 'already_credited';
+      return;
+    end if;
+  end if;
+  -- Idempotent monthly subscription grant (monthly_grant:<plan>:YYYY-MM)
+  if reason_text like 'monthly_grant:%' then
+    if exists (select 1 from public.avirzo_credit_ledger l where l.user_id = p_user_id and l.reason = reason_text) then
+      return query select true, coalesce((select b.balance from public.avirzo_credit_balances b where b.user_id = p_user_id), 0), 'already_granted';
+      return;
+    end if;
+  end if;
+  insert into public.avirzo_credit_balances(user_id, balance, updated_at)
+  values (p_user_id, p_amount, now())
+  on conflict (user_id) do update
+    set balance = public.avirzo_credit_balances.balance + p_amount,
+        updated_at = now()
+  returning public.avirzo_credit_balances.balance into new_bal;
+  insert into public.avirzo_credit_ledger(user_id, delta, balance_after, reason, meta)
+  values (p_user_id, p_amount, new_bal, reason_text, coalesce(p_meta, '{}'::jsonb));
+  return query select true, new_bal, 'ok';
+end;
 $$;
 
-drop policy if exists "avirzo_realtime_receive" on realtime.messages;
-create policy "avirzo_realtime_receive" on realtime.messages for select to authenticated using (
-  public.avirzo_topic_project_id(realtime.topic()) is not null
-  and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') <> ''
-);
+drop function if exists public.consume_avirzo_credits(uuid, integer, text, jsonb);
+create function public.consume_avirzo_credits(
+  p_user_id uuid,
+  p_amount integer,
+  p_reason text,
+  p_meta jsonb default '{}'::jsonb
+)
+returns table(ok boolean, balance integer, message text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cur integer;
+  new_bal integer;
+begin
+  if p_amount is null or p_amount <= 0 then
+    return query select true, coalesce((select b.balance from public.avirzo_credit_balances b where b.user_id = p_user_id), 0), 'no_charge';
+    return;
+  end if;
+  insert into public.avirzo_credit_balances(user_id, balance, updated_at)
+  values (p_user_id, 0, now())
+  on conflict (user_id) do nothing;
+  select b.balance into cur from public.avirzo_credit_balances b where b.user_id = p_user_id for update;
+  if cur is null or cur < p_amount then
+    return query select false, coalesce(cur, 0), 'insufficient_credits';
+    return;
+  end if;
+  update public.avirzo_credit_balances
+  set balance = balance - p_amount, updated_at = now()
+  where user_id = p_user_id
+  returning balance into new_bal;
+  insert into public.avirzo_credit_ledger(user_id, delta, balance_after, reason, meta)
+  values (p_user_id, -p_amount, new_bal, coalesce(nullif(trim(p_reason), ''), 'debit'), coalesce(p_meta, '{}'::jsonb));
+  return query select true, new_bal, 'ok';
+end;
+$$;
 
-drop policy if exists "avirzo_realtime_send" on realtime.messages;
-create policy "avirzo_realtime_send" on realtime.messages for insert to authenticated with check (
-  public.avirzo_topic_project_id(realtime.topic()) is not null
-  and (
-    (realtime.messages.extension = 'presence' and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') <> '')
-    or (realtime.messages.extension = 'broadcast' and coalesce(public.avirzo_my_project_role(public.avirzo_topic_project_id(realtime.topic())), '') in ('owner','editor'))
-  )
-);
+revoke execute on function public.add_avirzo_credits(uuid, integer, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.consume_avirzo_credits(uuid, integer, text, jsonb) from public, anon, authenticated;
+grant execute on function public.add_avirzo_credits(uuid, integer, text, jsonb) to service_role;
+grant execute on function public.consume_avirzo_credits(uuid, integer, text, jsonb) to service_role;
+
+notify pgrst, 'reload schema';

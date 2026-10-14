@@ -54,7 +54,12 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
   let totalBytes = 0;
   const countBytes = n => { totalBytes += n; if (totalBytes > MAX_TOTAL_BYTES) throw new Error('Export media is too large to process (disk limit reached).'); };
   if (!scenes.length) throw new Error('At least one rendered scene is required.');
-  if (scenes.length > 30) throw new Error('Export is limited to 30 scenes per job.');
+  // Feature path: plan-capped scene count and assembled duration (defaults allow Studio-scale features).
+  const plan = String(payload.plan || 'studio');
+  const sceneCap = Number(payload.maxScenes) > 0
+    ? Number(payload.maxScenes)
+    : (typeof ctx.maxExportScenes === 'function' ? ctx.maxExportScenes(plan) : 200);
+  if (scenes.length > sceneCap) throw new Error(`Export is limited to ${sceneCap} scenes per job.`);
   if (IS_PRODUCTION && !supabaseAdmin) throw new Error('Production exports require Supabase Storage.');
   for (const scene of scenes) {
     if (scene?.assetId) continue;
@@ -62,7 +67,9 @@ export async function processFilmExport({ payload, user, ctx, onProgress = async
     if (!url) throw new Error('Every export scene needs an archived asset or a video URL. Re-generate any missing scene.');
     assertSafeUrl(url);
   }
-  const MAX_EXPORT_DURATION_SECONDS = 15 * 60;
+  const MAX_EXPORT_DURATION_SECONDS = Number(payload.maxDurationSeconds) > 0
+    ? Number(payload.maxDurationSeconds)
+    : (typeof ctx.maxExportDurationSeconds === 'function' ? ctx.maxExportDurationSeconds(plan) : 90 * 60);
   const ensureActive = async () => { if (await isCanceled()) throw new Error('Export canceled by user.'); };
   await ensureActive();
   await onProgress(5);

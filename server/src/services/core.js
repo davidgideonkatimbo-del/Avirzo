@@ -1,6 +1,8 @@
-import { envInt, scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, freeTrialStart, TRIAL_GATED_KINDS } from './plans.js';
-export { scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, TRIAL_GATED_KINDS };
+import { envInt, scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, freeTrialStart, TRIAL_GATED_KINDS, maxStoryboardScenes, maxExportScenes, maxExportDurationSeconds } from './plans.js';
+export { scaledLimit, pickGenerationModel, PLAN_LIMIT_MULTIPLIER, freeTrialStatus, TRIAL_GATED_KINDS, maxStoryboardScenes, maxExportScenes, maxExportDurationSeconds };
 import { safeFetchBuffer } from './safeFetch.js';
+import { defaultCreditCost, creditsEnabled, creditPackCatalog, packCreditsForPriceId, planMonthlyCredits, currentCreditMonthKey } from './credits.js';
+export { defaultCreditCost, creditsEnabled, creditPackCatalog, packCreditsForPriceId, planMonthlyCredits, currentCreditMonthKey };
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
@@ -10,7 +12,7 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 export const HOST = process.env.HOST || '0.0.0.0';
 export const RUNWAY_API = 'https://api.dev.runwayml.com/v1';
 export const RUNWAY_VERSION = '2024-11-06';
-export const APP_VERSION = '2.11.0';
+export const APP_VERSION = '2.11.1';
 export const SUPABASE_URL = process.env.SUPABASE_URL || '';
 export const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || '';
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -57,7 +59,17 @@ export const voiceLanguageSupport = {
   'sa-zu': { code: null, supported: false, note: 'isiZulu requires a verified voice/provider for production.' },
   'sa-xh': { code: null, supported: false, note: 'isiXhosa requires a verified voice/provider for production.' },
   'sa-af': { code: 'afr', supported: true, note: 'Afrikaans is supported.' },
-  'sa-st': { code: null, supported: false, note: 'Sesotho requires a verified voice/provider for production.' }
+  'sa-st': { code: null, supported: false, note: 'Sesotho requires a verified voice/provider for production.' },
+  /* Phase A — expanded coverage */
+  'ghana-en': { code: 'eng', supported: true, note: 'English voice; choose a Ghanaian-appropriate voice.' },
+  'ghana-tw': { code: null, supported: false, note: 'Twi requires a verified voice/provider for production.' },
+  'ethiopia-am': { code: null, supported: false, note: 'Amharic requires a verified voice/provider for production.' },
+  'ethiopia-en': { code: 'eng', supported: true, note: 'English voice; choose an Ethiopian-appropriate voice.' },
+  'senegal-fr': { code: 'fra', supported: true, note: 'French voice; prefer a West African / Senegalese delivery when available.' },
+  'senegal-wo': { code: null, supported: false, note: 'Wolof requires a verified voice/provider for production.' },
+  'egypt-ar': { code: 'ara', supported: true, note: 'Arabic is supported; prefer Egyptian Arabic delivery when available.' },
+  'egypt-en': { code: 'eng', supported: true, note: 'English voice; choose an Egyptian-appropriate voice.' },
+  'diaspora-en': { code: 'eng', supported: true, note: 'English voice; match the diaspora community the filmmaker specifies.' }
 };
 
 export const africanProfiles = {
@@ -75,7 +87,17 @@ export const africanProfiles = {
   'sa-zu': { market: 'South Africa', language: 'isiZulu', guidance: 'Use isiZulu dialogue and South African cultural context. Preserve user-provided isiZulu and avoid fabricated translations.' },
   'sa-xh': { market: 'South Africa', language: 'isiXhosa', guidance: 'Use isiXhosa dialogue and South African cultural context. Preserve user-provided isiXhosa and avoid fabricated translations.' },
   'sa-af': { market: 'South Africa', language: 'Afrikaans', guidance: 'Use natural South African Afrikaans dialogue and local cultural context. Preserve user-provided wording.' },
-  'sa-st': { market: 'South Africa', language: 'Sesotho', guidance: 'Use Sesotho dialogue and South African cultural context. Preserve user-provided Sesotho and avoid fabricated translations.' }
+  'sa-st': { market: 'South Africa', language: 'Sesotho', guidance: 'Use Sesotho dialogue and South African cultural context. Preserve user-provided Sesotho and avoid fabricated translations.' },
+  /* Phase A — expanded coverage */
+  'ghana-en': { market: 'Ghana', language: 'Ghanaian English', guidance: 'Use contemporary Ghanaian English and authentic Ghanaian settings, social details and behavior. Avoid generic pan-African stereotypes.' },
+  'ghana-tw': { market: 'Ghana', language: 'Twi', guidance: 'Use natural Twi dialogue and Akan cultural context. Preserve user-provided Twi and avoid fabricated translations.' },
+  'ethiopia-am': { market: 'Ethiopia', language: 'Amharic', guidance: 'Use Amharic dialogue and Ethiopian cultural context. Preserve user-provided Amharic and avoid fabricated translations.' },
+  'ethiopia-en': { market: 'Ethiopia', language: 'Ethiopian English', guidance: 'Use contemporary Ethiopian English and authentic Ethiopian settings and social details. Avoid generic pan-African stereotypes.' },
+  'senegal-fr': { market: 'Senegal', language: 'French (Sénégal)', guidance: 'Use natural Senegalese French and local cultural context. Preserve user-provided wording; avoid inventing Wolof calques unless supplied.' },
+  'senegal-wo': { market: 'Senegal', language: 'Wolof', guidance: 'Use natural Wolof dialogue and Senegambian cultural context. Preserve user-provided Wolof and avoid fabricated translations.' },
+  'egypt-ar': { market: 'Egypt', language: 'Egyptian Arabic', guidance: 'Use Egyptian Arabic dialogue and Egyptian cultural context. Preserve user-provided wording; avoid inventing classical forms unless requested.' },
+  'egypt-en': { market: 'Egypt', language: 'Egyptian English', guidance: 'Use contemporary Egyptian English and authentic Egyptian settings and social details. Avoid generic pan-African stereotypes.' },
+  'diaspora-en': { market: 'Diaspora', language: 'Diaspora English', guidance: 'Use the English variety and cultural markers the filmmaker specifies for the diaspora community. Avoid generic “African abroad” stereotypes; stay specific to the named community and place.' }
 };
 
 export function requireRunwayKey(res) {
@@ -175,7 +197,71 @@ export async function durableUsageLimit(userId, kind, limit, who = {}) {
   const row = Array.isArray(data) ? data[0] : data;
   return { allowed: Boolean(row?.allowed), retryAfter: row?.retry_after || usageRetryAfter(kind, now) };
 }
- export async function requireProviderUser(req, res, kind) {
+/** Read credit balance (0 if none). Service role. */
+export async function getCreditBalance(userId) {
+  if (!supabaseAdmin || !userId || userId === 'development-user') return 0;
+  const { data, error } = await supabaseAdmin.from('avirzo_credit_balances').select('balance').eq('user_id', userId).maybeSingle();
+  if (error) { console.error('credit balance read failed:', error); return 0; }
+  return Number(data?.balance) || 0;
+}
+
+/** Grant credits once per unique reason (e.g. included_grant). */
+export async function addCredits(userId, amount, reason, meta = {}) {
+  if (!supabaseAdmin || !userId || userId === 'development-user') return { ok: true, balance: 0, local: true };
+  const { data, error } = await supabaseAdmin.rpc('add_avirzo_credits', {
+    p_user_id: userId, p_amount: Math.floor(amount), p_reason: String(reason || 'credit').slice(0, 80), p_meta: meta
+  });
+  if (error) {
+    // Unique grant index conflict → already granted
+    if (String(error.message || '').includes('avirzo_credit_ledger_unique_grant') || error.code === '23505') {
+      return { ok: true, balance: await getCreditBalance(userId), already: true };
+    }
+    console.error('add_avirzo_credits failed:', error);
+    return { ok: false, balance: 0, error };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return { ok: Boolean(row?.ok), balance: Number(row?.balance) || 0, message: row?.message };
+}
+
+export async function consumeCredits(userId, amount, reason, meta = {}) {
+  if (!supabaseAdmin || !userId || userId === 'development-user') return { ok: true, balance: 0, local: true };
+  const units = Math.floor(Number(amount) || 0);
+  if (units <= 0) return { ok: true, balance: await getCreditBalance(userId), noCharge: true };
+  const { data, error } = await supabaseAdmin.rpc('consume_avirzo_credits', {
+    p_user_id: userId, p_amount: units, p_reason: String(reason || 'debit').slice(0, 80), p_meta: meta
+  });
+  if (error) {
+    console.error('consume_avirzo_credits failed:', error);
+    if (IS_PRODUCTION) return { ok: false, balance: 0, infrastructureError: true };
+    return { ok: true, balance: 0, local: true };
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return { ok: Boolean(row?.ok), balance: Number(row?.balance) || 0, message: row?.message };
+}
+
+/**
+ * Grant this month's subscription-included production credits once (idempotent).
+ * Caps Avirzo provider exposure to planMonthlyCredits(plan) per user per calendar month.
+ */
+export async function ensureMonthlyPlanCredits(userId, plan) {
+  if (!userId || userId === 'development-user') return;
+  const amount = planMonthlyCredits(plan);
+  if (amount <= 0) return;
+  const monthKey = currentCreditMonthKey();
+  const reason = `monthly_grant:${plan}:${monthKey}`;
+  await addCredits(userId, amount, reason, { plan, month: monthKey, source: 'subscription_included' });
+}
+
+/** @deprecated use ensureMonthlyPlanCredits */
+export async function ensureIncludedCredits(userId, plan) {
+  return ensureMonthlyPlanCredits(userId, plan);
+}
+
+/**
+ * Auth + trial + plan quotas + subscription-included production credits (monthly cap).
+ * @param {number} [creditUnits] — override cost (e.g. generation seconds); default from defaultCreditCost(kind).
+ */
+export async function requireProviderUser(req, res, kind, creditUnits) {
   const user = await authUser(req);
   if (!IS_PRODUCTION && !user) return { id: 'development-user' };
 
@@ -203,6 +289,33 @@ export async function durableUsageLimit(userId, kind, limit, who = {}) {
       res.set('Retry-After', String(result.retryAfter));
       res.status(429).json({ error: 'RATE_LIMITED', message: `Too many ${kind} requests. Try again later.`, retryAfter: result.retryAfter });
       return null;
+    }
+  }
+
+  // Subscription-included monthly credits (hard cap protects Avirzo provider spend).
+  if (creditsEnabled() && TRIAL_GATED_KINDS.includes(kind)) {
+    await ensureMonthlyPlanCredits(user.id, plan);
+    const units = creditUnits != null ? Math.max(0, Math.floor(Number(creditUnits))) : defaultCreditCost(kind);
+    if (units > 0) {
+      const debit = await consumeCredits(user.id, units, kind, { kind, units });
+      if (debit.infrastructureError) {
+        res.status(503).json({ error: 'CREDITS_UNAVAILABLE', message: 'Credit wallet is temporarily unavailable. Please try again shortly.' });
+        return null;
+      }
+      if (!debit.ok) {
+        const monthly = planMonthlyCredits(plan);
+        res.status(402).json({
+          error: 'INSUFFICIENT_CREDITS',
+          message: `This ${kind} needs ${units} credit${units === 1 ? '' : 's'}. Your ${plan} plan includes up to ${monthly} production credits per month. Upgrade your plan for a higher monthly allowance, or wait until next month.`,
+          required: units,
+          balance: debit.balance || 0,
+          planMonthlyCredits: monthly,
+          plan
+        });
+        return null;
+      }
+      user._creditBalance = debit.balance;
+      user._creditsCharged = units;
     }
   }
   return user;

@@ -158,3 +158,99 @@ test('free clips are counted from the start of the free month and usage is read 
   assert.match(billing, /usageWindowStart\(kind/);
   assert.doesNotMatch(billing, /now\.setUTCMinutes\(0,0,0\); const start/);
 });
+
+import { defaultCreditCost, creditsEnabled, creditPackCatalog, packCreditsForPriceId } from '../src/services/credits.js';
+
+test('credit costs scale with generation seconds and fixed voice/performance', () => {
+  assert.equal(defaultCreditCost('generation', { durationSeconds: 5 }), 5);
+  assert.equal(defaultCreditCost('generation', { durationSeconds: 10 }), 10);
+  assert.equal(defaultCreditCost('generation', {}), 5);
+  assert.equal(defaultCreditCost('voice'), 2);
+  assert.equal(defaultCreditCost('performance'), 5);
+  assert.equal(defaultCreditCost('export'), 0);
+  assert.equal(defaultCreditCost('unknown'), 0);
+});
+
+test('creditsEnabled is off outside production unless forced', () => {
+  assert.equal(creditsEnabled({ NODE_ENV: 'development' }), false);
+  assert.equal(creditsEnabled({ NODE_ENV: 'production' }), true);
+  assert.equal(creditsEnabled({ NODE_ENV: 'production', CREDITS_ENABLED: 'false' }), false);
+  assert.equal(creditsEnabled({ NODE_ENV: 'development', CREDITS_ENABLED: 'true' }), true);
+});
+
+test('credit pack catalog only lists packs with Stripe price IDs', () => {
+  assert.deepEqual(creditPackCatalog({}), []);
+  const packs = creditPackCatalog({
+    STRIPE_CREDIT_PACK_STARTER_PRICE_ID: 'price_starter',
+    CREDIT_PACK_STARTER_CREDITS: '50',
+    STRIPE_CREDIT_PACK_PRO_PRICE_ID: 'price_pro',
+    CREDIT_PACK_PRO_CREDITS: '200'
+  });
+  assert.equal(packs.length, 2);
+  assert.equal(packs[0].id, 'starter');
+  assert.equal(packs[0].credits, 50);
+  assert.equal(packCreditsForPriceId('price_pro', {
+    STRIPE_CREDIT_PACK_PRO_PRICE_ID: 'price_pro',
+    CREDIT_PACK_PRO_CREDITS: '200'
+  }), 200);
+  assert.equal(packCreditsForPriceId('missing', {}), null);
+});
+
+test('credit wallet SQL is present and RPCs are service_role only', () => {
+  const sql = fs.readFileSync(new URL('../../supabase.sql', import.meta.url), 'utf8');
+  assert.match(sql, /create table if not exists public\.avirzo_credit_balances/);
+  assert.match(sql, /create table if not exists public\.avirzo_credit_ledger/);
+  assert.match(sql, /create function public\.add_avirzo_credits/);
+  assert.match(sql, /create function public\.consume_avirzo_credits/);
+  assert.match(sql, /already_granted/);
+  assert.match(sql, /stripe_pack:%/);
+  assert.match(sql, /grant execute on function public\.add_avirzo_credits/);
+  assert.match(sql, /to service_role/);
+  assert.match(sql, /revoke execute on function public\.consume_avirzo_credits/);
+});
+
+test('generation route refunds credits when provider start fails', () => {
+  const gen = fs.readFileSync(new URL('../src/routes/generation.js', import.meta.url), 'utf8');
+  assert.match(gen, /refundCredits/);
+  assert.match(gen, /provider_rejected/);
+  assert.match(gen, /creditsCharged/);
+  assert.match(gen, /requireProviderUser\(req, res, 'generation', seconds\)/);
+});
+
+test('billing exposes credit checkout and payment webhook path', () => {
+  const billing = fs.readFileSync(new URL('../src/routes/billing.js', import.meta.url), 'utf8');
+  assert.match(billing, /\/api\/billing\/credits\/checkout/);
+  assert.match(billing, /mode === 'payment'/);
+  assert.match(billing, /addCredits/);
+  assert.match(billing, /credits:\s*\{/);
+});
+
+test('plan monthly credits default free/creator/studio allowances', async () => {
+  const { planMonthlyCredits, currentCreditMonthKey } = await import('../src/services/credits.js');
+  assert.equal(planMonthlyCredits('free'), 25);
+  assert.equal(planMonthlyCredits('creator'), 300);
+  assert.equal(planMonthlyCredits('studio'), 1000);
+  assert.match(currentCreditMonthKey(new Date('2026-10-13T00:00:00Z')), /^2026-10$/);
+});
+
+test('feature limits: storyboard and export scene caps scale by plan', async () => {
+  const { maxStoryboardScenes, maxExportScenes, maxExportDurationSeconds } = await import('../src/services/plans.js');
+  assert.equal(maxStoryboardScenes('free'), 24);
+  assert.equal(maxStoryboardScenes('creator'), 80);
+  assert.equal(maxStoryboardScenes('studio'), 200);
+  assert.equal(maxExportScenes('studio'), 200);
+  assert.equal(maxExportDurationSeconds('free'), 900);
+  assert.equal(maxExportDurationSeconds('creator'), 2700);
+  assert.equal(maxExportDurationSeconds('studio'), 5400);
+});
+
+test('storyboard and export routes use raised feature caps not hard-coded 12/30', () => {
+  const heritage = fs.readFileSync(new URL('../src/routes/heritage.js', import.meta.url), 'utf8');
+  const exportRoute = fs.readFileSync(new URL('../src/routes/export.js', import.meta.url), 'utf8');
+  const exporter = fs.readFileSync(new URL('../src/services/exporter.js', import.meta.url), 'utf8');
+  assert.match(heritage, /maxStoryboardScenes/);
+  assert.doesNotMatch(heritage, /slice\(0,\s*12\)/);
+  assert.match(exportRoute, /maxExportScenes/);
+  assert.doesNotMatch(exportRoute, /limited to 30 scenes/);
+  assert.match(exporter, /maxExportDurationSeconds|maxDurationSeconds/);
+});

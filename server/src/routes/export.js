@@ -2,7 +2,7 @@ import { processFilmExport } from '../services/exporter.js';
 import { assertSafeUrl } from '../services/safeFetch.js';
 
 export function registerRoutes(app, ctx) {
-  const { IS_PRODUCTION, WORKER_ENABLED, requireProviderUser, requireOwnedProject, jobs } = ctx;
+  const { IS_PRODUCTION, WORKER_ENABLED, requireProviderUser, requireOwnedProject, jobs, getUserPlan, maxExportScenes, maxExportDurationSeconds } = ctx;
 
   app.post('/api/export/film', async (req, res) => {
     const exportUser = await requireProviderUser(req, res, 'export');
@@ -28,13 +28,26 @@ export function registerRoutes(app, ctx) {
       return res.status(400).json({ message: 'Every production export scene needs an archived asset or a video URL. Re-generate any scene that has neither.' });
     }
     // Prefer archived assets; provider URLs are accepted so a shot can still be exported if archive lagged.
-    if (payload.scenes.length > 30) return res.status(413).json({ message: 'Export is limited to 30 scenes per job.' });
+    const plan = await getUserPlan(exportUser.id);
+    const sceneCap = typeof maxExportScenes === 'function' ? maxExportScenes(plan) : 24;
+    if (payload.scenes.length > sceneCap) {
+      return res.status(413).json({
+        message: `Export is limited to ${sceneCap} scenes on the ${plan} plan. Upgrade for longer feature exports.`,
+        maxScenes: sceneCap,
+        plan
+      });
+    }
+    payload.plan = plan;
+    payload.maxScenes = sceneCap;
+    if (typeof maxExportDurationSeconds === 'function') {
+      payload.maxDurationSeconds = maxExportDurationSeconds(plan);
+    }
     try {
       payload.scenes.forEach(s => { if (!s?.assetId) assertSafeUrl(String(s?.videoUrl || '')); });
       payload.audioTracks.forEach(t => { const src = String(t?.src || '').trim(); if (src && !/^data:audio\//i.test(src)) assertSafeUrl(src); });
     } catch (e) { return res.status(400).json({ message: e.message || 'Invalid media URL.' }); }
 
-    if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 15 * 1024 * 1024) return res.status(413).json({ message: 'Export request is too large for the durable worker queue. Upload large audio files to Avirzo private media storage first.' });
+    if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 40 * 1024 * 1024) return res.status(413).json({ message: 'Export request is too large for the durable worker queue. Upload large audio files to Avirzo private media storage first.' });
 
     let queueForWorker = false;
     if (IS_PRODUCTION && WORKER_ENABLED) {

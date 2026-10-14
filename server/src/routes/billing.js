@@ -3,7 +3,11 @@ import express from 'express';
 function expressRaw(){ return express.raw({type:'application/json'}); }
 
 export function registerRoutes(app, ctx) {
-  const { supabaseAdmin, requireCloudUser, RATE_LIMITS, getUserPlan, scaledLimit, freeTrialStatus, usageWindowStart } = ctx;
+  const {
+    supabaseAdmin, requireCloudUser, RATE_LIMITS, getUserPlan, scaledLimit, freeTrialStatus, usageWindowStart,
+    getCreditBalance, addCredits, creditPackCatalog, packCreditsForPriceId, creditsEnabled,
+    ensureIncludedCredits, ensureMonthlyPlanCredits, planMonthlyCredits, currentCreditMonthKey
+  } = ctx;
   const plans = { free:{id:'free',name:'Free'}, creator:{id:'creator',name:'Creator'}, studio:{id:'studio',name:'Studio'} };
 
 
@@ -65,6 +69,33 @@ export function registerRoutes(app, ctx) {
           const { data: existing } = await supabaseAdmin.from('avirzo_billing_accounts').select('plan,status').eq('user_id', userId).maybeSingle();
           await applyAccount(userId, { plan: existing?.plan || 'free', status: existing?.status || 'active', provider_customer_id: customerId, provider_subscription_id: typeof obj.subscription === 'string' ? obj.subscription : null }, created);
         }
+      } else if (event.type === 'checkout.session.completed' && obj.mode === 'payment') {
+        // One-time credit pack purchase — production budget paid by the film creator.
+        const userId = await resolveUserId(obj);
+        if (userId) {
+          let credits = Number(obj.metadata?.credits || 0);
+          if (!Number.isFinite(credits) || credits <= 0) {
+            const priceId = obj.metadata?.price_id || '';
+            credits = packCreditsForPriceId?.(priceId) || 0;
+          }
+          credits = Math.floor(credits);
+          if (credits > 0) {
+            const result = await addCredits(userId, credits, `stripe_pack:${event.id}`, {
+              session_id: obj.id, price_id: obj.metadata?.price_id || null, event_id: event.id
+            });
+            if (!result.ok) throw new Error('Could not credit production wallet after payment.');
+          } else {
+            console.error(`Billing: payment checkout ${obj.id} had no credits metadata; wallet unchanged.`);
+          }
+          if (customerId) {
+            const { data: existing } = await supabaseAdmin.from('avirzo_billing_accounts').select('plan,status').eq('user_id', userId).maybeSingle();
+            await applyAccount(userId, {
+              plan: existing?.plan || 'free',
+              status: existing?.status || 'active',
+              provider_customer_id: customerId
+            }, created);
+          }
+        }
       } else if (['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted'].includes(event.type)) {
         const userId = await resolveUserId(obj);
         if (!userId) throw new Error('Subscription event could not be matched to an Avirzo user yet; Stripe will retry.');
@@ -97,17 +128,36 @@ export function registerRoutes(app, ctx) {
   app.get('/api/billing/summary', async (req,res) => {
     const user = await requireCloudUser(req,res); if (!user) return;
     try {
-      if (!supabaseAdmin) return res.json({plan:plans.free,billing:{status:'local'},usage:{}});
+      if (!supabaseAdmin) return res.json({plan:plans.free,billing:{status:'local'},usage:{},credits:{balance:0,enabled:false,packs:[]}});
       const {data:account} = await supabaseAdmin.from('avirzo_billing_accounts').select('plan,status,current_period_end,provider_customer_id').eq('user_id',user.id).maybeSingle();
       const plan = plans[await getUserPlan(user.id)] || plans.free;
       const effectivePlan = await getUserPlan(user.id);
+      if (typeof ensureMonthlyPlanCredits === 'function') await ensureMonthlyPlanCredits(user.id, effectivePlan);
+      else if (typeof ensureIncludedCredits === 'function') await ensureIncludedCredits(user.id, effectivePlan);
       // Each kind has its own window (hourly, or yearly/free-month for generation), so look each one up with its own start.
       const starts = {}; for (const kind of Object.keys(RATE_LIMITS)) starts[kind] = usageWindowStart(kind, new Date(), { plan: effectivePlan, createdAt: user.created_at }).toISOString();
       const {data:counters,error} = await supabaseAdmin.from('avirzo_usage_counters').select('kind,count,window_start').eq('user_id',user.id).in('window_start',[...new Set(Object.values(starts))]);
       if(error) throw error;
       const usage = {}; for(const [kind,base] of Object.entries(RATE_LIMITS)) usage[kind] = {used:(counters||[]).find(x=>x.kind===kind && new Date(x.window_start).toISOString()===starts[kind])?.count||0,limit:scaledLimit(base,effectivePlan).max};
       const trial = freeTrialStatus({ createdAt: user.created_at, plan: effectivePlan });
-      return res.json({plan,trial,billing:{status:account?.status||'active',current_period_end:account?.current_period_end||null,can_manage:Boolean(account?.provider_customer_id && process.env.STRIPE_SECRET_KEY)},usage});
+      const balance = typeof getCreditBalance === 'function' ? await getCreditBalance(user.id) : 0;
+      const monthly = typeof planMonthlyCredits === 'function' ? planMonthlyCredits(effectivePlan) : 0;
+      const monthKey = typeof currentCreditMonthKey === 'function' ? currentCreditMonthKey() : '';
+      // Top-up packs are optional overage only — primary path is subscription monthly allowance.
+      const packs = typeof creditPackCatalog === 'function' ? creditPackCatalog().map(p => ({ id: p.id, label: p.label, credits: p.credits, priceHint: p.priceHint, available: true })) : [];
+      return res.json({
+        plan, trial,
+        billing:{status:account?.status||'active',current_period_end:account?.current_period_end||null,can_manage:Boolean(account?.provider_customer_id && process.env.STRIPE_SECRET_KEY)},
+        usage,
+        credits: {
+          balance,
+          monthlyIncluded: monthly,
+          month: monthKey,
+          enabled: typeof creditsEnabled === 'function' ? creditsEnabled() : false,
+          packs,
+          note: `Your ${effectivePlan} plan includes up to ${monthly} production credits this month (video, voice, performance). That monthly cap protects platform costs. Optional top-ups appear only if configured.`
+        }
+      });
     } catch(e) { res.status(500).json({message:e.message || 'Could not load billing summary.'}); }
   });
 
@@ -146,6 +196,48 @@ export function registerRoutes(app, ctx) {
       const d=await r.json(); if(!r.ok || !d.url) return res.status(502).json({message:d.error?.message||'Stripe checkout could not be created.'});
       res.json({url:d.url});
     } catch(e) { console.error('Checkout failed:', e); res.status(502).json({message:'We could not start checkout right now. You have not been charged. Please try again.'}); }
+  });
+
+  // One-time production credit packs — cost sits on the film creator.
+  app.post('/api/billing/credits/checkout', async (req, res) => {
+    const user = await requireCloudUser(req, res); if (!user) return;
+    const packId = String(req.body?.packId || req.body?.pack || '').toLowerCase();
+    const packs = typeof creditPackCatalog === 'function' ? creditPackCatalog() : [];
+    const pack = packs.find((p) => p.id === packId || p.id.includes(packId));
+    const base = publicBase();
+    if (!process.env.STRIPE_SECRET_KEY || !base) {
+      return res.status(503).json({ message: 'Credit checkout is not configured. Add STRIPE_SECRET_KEY and AVIRZO_PUBLIC_URL.' });
+    }
+    if (!pack?.priceId) {
+      return res.status(503).json({
+        message: 'That credit pack is not configured yet. Set STRIPE_CREDIT_PACK_STARTER_PRICE_ID (and optional PRO/STUDIO pack price IDs) in the environment.'
+      });
+    }
+    if (!supabaseAdmin) return res.status(503).json({ message: 'Billing storage is not configured.' });
+    if (!(await billingRateOk(user, res))) return;
+    try {
+      const { data: account } = await supabaseAdmin.from('avirzo_billing_accounts').select('provider_customer_id').eq('user_id', user.id).maybeSingle();
+      const params = new URLSearchParams();
+      params.set('mode', 'payment');
+      params.set('line_items[0][price]', pack.priceId);
+      params.set('line_items[0][quantity]', '1');
+      params.set('success_url', `${base}/?billing=credits_success`);
+      params.set('cancel_url', `${base}/?billing=credits_cancelled`);
+      params.set('client_reference_id', user.id);
+      params.set('metadata[user_id]', user.id);
+      params.set('metadata[credits]', String(pack.credits));
+      params.set('metadata[price_id]', pack.priceId);
+      params.set('metadata[pack_id]', pack.id);
+      if (account?.provider_customer_id) params.set('customer', account.provider_customer_id);
+      else params.set('customer_email', user.email || '');
+      const r = await fetch('https://api.stripe.com/v1/checkout/sessions', { method: 'POST', headers: stripeHeaders(), body: params });
+      const d = await r.json();
+      if (!r.ok || !d.url) return res.status(502).json({ message: d.error?.message || 'Credit checkout could not be created.' });
+      res.json({ url: d.url, credits: pack.credits, pack: pack.id });
+    } catch (e) {
+      console.error('Credit checkout failed:', e);
+      res.status(502).json({ message: 'We could not start credit checkout. You have not been charged. Please try again.' });
+    }
   });
 
   // Stripe-hosted portal: update card, switch plan, view invoices, cancel. Requires the portal to be enabled in the Stripe dashboard.

@@ -9,7 +9,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 import { supabase, supabaseEnabled } from './supabase';
 import { useJobs } from './hooks/useJobs';
-import { useProjectRoom } from './hooks/useProjectRoom';
 import { JobCenter } from './components/JobCenter';
 import { TemplatePicker } from './components/TemplatePicker';
 import { AppShell } from './components/AppShell';
@@ -97,14 +96,6 @@ function App(){
   }
   const [activeJobId,setActiveJobId]=useState(''); const [cancelingJobId,setCancelingJobId]=useState(''); const [retryingJobId,setRetryingJobId]=useState(''); const [exportJobId,setExportJobId]=useState('');
   const { jobs, recentJobs, refreshJobs, cancelJob, retryJob } = useJobs(apiFetch, Boolean(authUser), projectId);
-  // Live collaboration: remote patches land in the same state setters the local editors use.
-  const roomSetters={story:setStory,historicalNotes:setHistoricalNotes,worldBible:setWorldBible,characters:setCharacters,rootsFoundation:setRootsFoundation};
-  const room=useProjectRoom({projectId,authUser,apiFetch,onPatch:(field,value)=>{ roomSetters[field]?.(value); }});
-  useEffect(()=>{ room.sendPatch('story',story); },[story]);
-  useEffect(()=>{ room.sendPatch('historicalNotes',historicalNotes); },[historicalNotes]);
-  useEffect(()=>{ room.sendPatch('worldBible',worldBible); },[worldBible]);
-  useEffect(()=>{ room.sendPatch('characters',characters); },[characters]);
-  useEffect(()=>{ room.sendPatch('rootsFoundation',rootsFoundation); },[rootsFoundation]);
   async function cancelActiveJob(id){ setCancelingJobId(id); try{ await cancelJob(id); setActiveJobId(''); setGenerating(false); setExporting(false); setMessage('Job canceled.'); }catch(e){setMessage(e.message||'Could not cancel job.')}finally{setCancelingJobId('');} }
   async function retryActiveJob(id){ setRetryingJobId(id); try{ await retryJob(id); setMessage('Job queued for retry.'); }catch(e){setMessage(e.message||'Could not retry job.')}finally{setRetryingJobId('');} }
   useEffect(()=>{ const job=jobs.find(x=>x.id===exportJobId); if(!job)return; if(job.status==='succeeded'&&job.result_asset_id&&!exportUrl){ openAsset(job.result_asset_id).then(url=>{if(url){setExportUrl(url);setMessage('Film export is ready and archived in your private media library.');setExporting(false);}}); } else if(job.status==='failed'){setExporting(false);setMessage(job.error||'Film export failed.');} else if(job.status==='canceled'){setExporting(false);setMessage('Film export canceled.');} },[jobs,exportJobId,exportUrl]);
@@ -186,7 +177,7 @@ function App(){
     return d.project;
   }
   async function saveProject(){ if(!authUser){setProjectStatus('Sign in first to save projects to the cloud library.');setShowProjects(true);return;} setProjectLoading(true); setProjectStatus('Saving project…'); try{let d;if(projectId){d={project:await saveProjectSnapshot()};}else{const payload=projectPayload();const r=await apiFetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});d=await r.json().catch(()=>({}));if(!r.ok||d.verified!==true)throw new Error(d.message||'Project save could not be verified.');}setProjectId(d.project.id);setProjectName(d.project.name);await refreshProjects();setLastSavedAt(new Date().toISOString()); setProjectStatus('Project saved and verified in the cloud library.');}catch(e){setProjectStatus(e.message||'Could not save project.')}finally{setProjectLoading(false)} }
-  async function loadProject(id){ setProjectLoading(true); setProjectStatus('Loading project…'); setVideoUrl(''); setExportUrl(''); setExportSrt(''); setGenerating(false); setExporting(false); setActiveJobId(''); setExportJobId(''); setMessage(''); try{const r=await apiFetch(`/api/projects/${id}`); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not load project.'); const p=d.project; room.quiet(); setProjectId(p.id); setProjectName(p.name||'Avirzo Film'); setProjectFolder(p.folder||'My Films'); setMode(p.mode||'story'); setStory(p.story||''); setStyle(p.style||'Historical drama'); setCamera(p.camera||'Slow dolly'); setDuration(p.duration||'5 sec'); setFormat(p.format||'16:9'); setAfricanProfile(p.africanProfile||'uganda-lg'); setEra(p.era||'pre1994'); setStoryType(p.storyType||'oral'); setRootsFoundation(p.rootsFoundation||{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}); setHistoricalNotes(p.historicalNotes||''); setScenes(p.scenes||[]); setCharacters(p.characters||[]); setResearch(p.research||emptyResearch); setWorldBible(p.worldBible||{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}); setTimeline(p.timeline||[]); setAudioTracks(p.audioTracks||[]); setCaptions(p.captions||[]); setDuckMusic(p.duckMusic!==false); setCaptionMode(['burn','soft','none'].includes(p.captionMode)?p.captionMode:'burn'); setExportQuality(['draft','standard','high'].includes(p.exportQuality)?p.exportQuality:(['draft','standard','high'].includes(p.quality)?p.quality:'standard')); setIncludeSrt(p.includeSrt!==false); setReview(p.review||{enabled:false,notes:[]}); setAiEndCard(p.aiEndCard===true); setExportUrl(p.exportUrl||''); setShowProjects(false); setLastSavedAt(p.updated_at||p.updatedAt||new Date().toISOString()); setProjectStatus(`Loaded “${p.name}”.`); navigate(`project/${p.id}/overview`); if(Array.isArray(p.scenes)&&p.scenes.some(x=>x.assetId)){ const hydrated=await Promise.all(p.scenes.map(async x=>x.assetId?{...x,videoUrl:await openAsset(x.assetId)}:x)); setScenes(hydrated); }}catch(e){setProjectStatus(e.message||'Could not load project.')}finally{setProjectLoading(false)} }
+  async function loadProject(id){ setProjectLoading(true); setProjectStatus('Loading project…'); setVideoUrl(''); setExportUrl(''); setExportSrt(''); setGenerating(false); setExporting(false); setActiveJobId(''); setExportJobId(''); setMessage(''); try{const r=await apiFetch(`/api/projects/${id}`); const d=await r.json(); if(!r.ok)throw new Error(d.message||'Could not load project.'); const p=d.project; setProjectId(p.id); setProjectName(p.name||'Avirzo Film'); setProjectFolder(p.folder||'My Films'); setMode(p.mode||'story'); setStory(p.story||''); setStyle(p.style||'Historical drama'); setCamera(p.camera||'Slow dolly'); setDuration(p.duration||'5 sec'); setFormat(p.format||'16:9'); setAfricanProfile(p.africanProfile||'uganda-lg'); setEra(p.era||'pre1994'); setStoryType(p.storyType||'oral'); setRootsFoundation(p.rootsFoundation||{community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''}); setHistoricalNotes(p.historicalNotes||''); setScenes(p.scenes||[]); setCharacters(p.characters||[]); setResearch(p.research||emptyResearch); setWorldBible(p.worldBible||{locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''}); setTimeline(p.timeline||[]); setAudioTracks(p.audioTracks||[]); setCaptions(p.captions||[]); setDuckMusic(p.duckMusic!==false); setCaptionMode(['burn','soft','none'].includes(p.captionMode)?p.captionMode:'burn'); setExportQuality(['draft','standard','high'].includes(p.exportQuality)?p.exportQuality:(['draft','standard','high'].includes(p.quality)?p.quality:'standard')); setIncludeSrt(p.includeSrt!==false); setReview(p.review||{enabled:false,notes:[]}); setAiEndCard(p.aiEndCard===true); setExportUrl(p.exportUrl||''); setShowProjects(false); setLastSavedAt(p.updated_at||p.updatedAt||new Date().toISOString()); setProjectStatus(`Loaded “${p.name}”.`); navigate(`project/${p.id}/overview`); if(Array.isArray(p.scenes)&&p.scenes.some(x=>x.assetId)){ const hydrated=await Promise.all(p.scenes.map(async x=>x.assetId?{...x,videoUrl:await openAsset(x.assetId)}:x)); setScenes(hydrated); }}catch(e){setProjectStatus(e.message||'Could not load project.')}finally{setProjectLoading(false)} }
   async function deleteProject(id){ if(!confirm('Delete this saved Avirzo project?')) return; try{const r=await apiFetch(`/api/projects/${id}`,{method:'DELETE'}); if(!r.ok)throw new Error('Could not delete project.'); if(projectId===id){ resetWorkspace(); setMessage(''); } await refreshProjects(); setProjectStatus('Project deleted.');}catch(e){setProjectStatus(e.message)} }
   function resetWorkspace(){ setProjectId('');setLastSavedAt(null);setProjectName('My Avirzo Film');setProjectFolder('My Films');setMode('story');setAfricanProfile('uganda-lg');setEra('pre1994');setStoryType('oral');setStyle('Historical drama');setCamera('Slow dolly');setDuration('5 sec');setFormat('16:9');setStory('');setHistoricalNotes('');setScenes([]);setCharacters([]);setResearch({...emptyResearch});setWorldBible({locations:'',objects:'',costumes:'',architecture:'',culturalPractices:'',musicSoundscape:'',languageRules:'',visualRules:'',familyStructure:'',taboosAndSensitivities:'',continuityLocks:'',relationships:''});setRootsFoundation({community:'',country:'',place:'',language:'',period:'',culturalAnchors:'',evidenceLevel:'',creativeLiberties:'',sensitivityNotes:''});setTimeline([]);setAudioTracks([]);setCaptions([]);setExportUrl('');setExportSrt('');setVideoUrl('');setActiveTemplateId(''); }
   function newProject(){ resetWorkspace(); setMessage('New project started. Enter a project name, then select Save project.');setShowProjects(true); }
@@ -291,7 +282,15 @@ function App(){
       }
       const scenePrompt=String(working.prompt||working.title||story||'').trim(); if(!scenePrompt) throw new Error('This scene has no prompt text. Add a description or rebuild the storyboard.'); const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scenePrompt,style,camera:working.camera||camera||'Slow dolly',duration:working.duration||duration,format,sceneNumber:working.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage||'',referenceCharacter:characterPayload(refChar),projectId:projectId||null,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:working.primaryCharacterId||''})});
       const data=await readApiJson(r);
-      if(!r.ok) throw new Error(data.message||'Generation request failed.');
+      if(!r.ok){
+        if(data.error==='INSUFFICIENT_CREDITS'||(r.status===402&&data.error!=='TRIAL_ENDED')){
+          throw new Error(data.message||'Not enough production credits this month. Upgrade your plan in Billing for a higher monthly allowance.');
+        }
+        if(data.error==='TRIAL_ENDED'){
+          throw new Error(data.message||'Your free month has ended. Choose Creator or Studio in Billing.');
+        }
+        throw new Error(data.message||'Generation request failed.');
+      }
       if(!data.taskId) throw new Error(data.message||'Generation started but no task id was returned. Check that RUNWAYML_API_SECRET is set.');
       setActiveJobId(data.jobId||'');
       const result=await pollTask(data.taskId,data.jobId);
@@ -431,9 +430,9 @@ function App(){
   const projectFolders=['All folders',...Array.from(new Set(projects.map(p=>p.folder||'My Films'))).sort()];
   const projectProps={projectFolder, setProjectFolder, projectFolderFilter, setProjectFolderFilter, projectFolders, visibleProjects, authUser,authEmail,setAuthEmail,authPassword,setAuthPassword,authMode,setAuthMode,authStatus,authLoading,handleAuth,handleSignOut,projectId,projectName,setProjectName,projects,projectStatus,projectLoading,lastSavedAt,newProject,saveProject,loadProject,deleteProject,exportFrameworkPack,assets,assetStatus,refreshAssets,openAsset,deleteAsset};
   const researchProps={research,setResearch,researchStatus,setResearchStatus,setEra,setAfricanProfile,setStoryType};
-  const timelineProps={timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,aiEndCard,setAiEndCard,review,setReview,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,projectName,format};
+  const timelineProps={timeline,audioTracks,captions,duckMusic,setDuckMusic,captionMode,setCaptionMode,exportQuality,setExportQuality,includeSrt,setIncludeSrt,aiEndCard,setAiEndCard,review,setReview,addAudioTrack,updateAudio,removeAudio,addCaption,updateCaption,removeCaption,exporting,exportFilm,exportUrl,exportSrt,projectName,format,setFormat};
   const bibleProps={characters,draft,setDraft,characterStatus,setCharacterStatus,addCharacter,removeCharacter,generateCharacterPerformance,uploadMediaToCloud,fileToDataUrl};
-  const collaborationProps={apiFetch,projectId,authUser,projectName,room};
+  const collaborationProps={apiFetch,projectId,authUser,projectName};
 
   function renderQuickStart(){
     return <section className="quick-start cinematic-panel">
@@ -512,7 +511,7 @@ function App(){
           <button type="button" onClick={()=>navigate('voices')}>Voices</button>
           <button type="button" onClick={()=>navigate('timeline')}>Timeline</button>
         </div>
-        <TemplatePicker visible={showTemplates} onSelect={applyTemplate} onDismiss={()=>setShowTemplates(false)} />
+        <TemplatePicker visible={showTemplates} onSelect={applyTemplate} onDismiss={()=>setShowTemplates(false)} apiFetch={apiFetch} onImportMessage={setMessage} />
         {mode==='story' ? <>
           <StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/>
           <StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/>
@@ -525,22 +524,35 @@ function App(){
     </>;
   }
 
+  function startFirstFilm(templateId){
+    const t = heritageTemplates.find(x => x.id === templateId) || heritageTemplates.find(x => x.id === 'oral-elder');
+    if (t) applyTemplate(t);
+    setShowTemplates(false);
+    setMode('story');
+    setMessage('Template applied. Follow the First film path: Story → Storyboard → First scene → Preview.');
+    navigate('studio');
+  }
+
   function renderHome(){
     return <>
       <section className="home-hero page-heading premium-hero">
         <div className="hero-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
         <div className="eyebrow">AVIRZO · AFRICAN CINEMA STUDIO</div>
         <h1>Stories with<br/><em>a soul.</em></h1>
-        <p>Turn African stories, memory and imagination into cinematic films — with the roots kept at the heart of every frame.</p>
+        <p>Turn African memory, languages and imagination into cinematic films — roots intact, craft modern, ready for the world.</p>
         <div className="hero-actions">
-          <button className="hero-cta" type="button" onClick={()=>navigate('studio')}>Enter the Studio <span>→</span></button>
+          <button className="hero-cta" type="button" onClick={()=>startFirstFilm('oral-elder')}>Make my first film <span>→</span></button>
+          <button className="hero-link" type="button" onClick={()=>navigate('studio')}>Enter the Studio</button>
           <button className="hero-link" type="button" onClick={()=>navigate('projects')}>View films</button>
         </div>
-        <div className="hero-signature"><span>HERITAGE-FIRST</span><i></i><span>CREATOR-LED</span><i></i><span>CINEMATIC</span></div>
+        <div className="hero-signature"><span>HERITAGE-FIRST</span><i></i><span>CREATOR-LED</span><i></i><span>WORLD-READY</span></div>
+        <p className="muted" style={{ marginTop: 12, fontSize: 12, maxWidth: '36rem' }}>
+          Free month includes 5 clips to finish a first film. Projects, research and templates stay after the trial — generation upgrades with Creator or Studio. Templates work offline after your first visit.
+        </p>
       </section>
       <section className="dashboard-grid dashboard-grid-home premium-dashboard">
-        <button className="dashboard-card dashboard-primary premium-card" onClick={()=>navigate('studio')}><span className="dashboard-icon">✦</span><span className="card-kicker">01 · CREATE</span><strong>Studio</strong><small>Shape the story, then make the scene.</small><span className="card-arrow">↗</span></button>
-        <button className="dashboard-card premium-card" onClick={()=>navigate('projects')}><span className="dashboard-icon">▣</span><span className="card-kicker">02 · BUILD</span><strong>Projects</strong><small>Keep every film, scene and asset together.</small><span className="card-arrow">↗</span></button>
+        <button className="dashboard-card dashboard-primary premium-card" onClick={()=>startFirstFilm('oral-elder')}><span className="dashboard-icon">✦</span><span className="card-kicker">01 · FIRST FILM</span><strong>Start in 3 taps</strong><small>Template → Story → First scene.</small><span className="card-arrow">↗</span></button>
+        <button className="dashboard-card premium-card" onClick={()=>navigate('studio')}><span className="dashboard-icon">▣</span><span className="card-kicker">02 · STUDIO</span><strong>Open workspace</strong><small>Shape the story, then make the scene.</small><span className="card-arrow">↗</span></button>
         <button className="dashboard-card premium-card" onClick={()=>navigate('heritage')}><span className="dashboard-icon">◈</span><span className="card-kicker">03 · ROOT</span><strong>Heritage</strong><small>Protect the culture behind the story.</small><span className="card-arrow">↗</span></button>
       </section>
       <section className="dashboard-status-grid compact-status-grid">
@@ -552,7 +564,7 @@ function App(){
           <div>
             <div className="eyebrow">SEE THE PATH</div>
             <h2>Example first films</h2>
-            <p>Three short paths from heritage template to first scene. Open Studio and follow the same steps.</p>
+            <p>Pick a path. Each template seeds language, era, research notes and character continuity — then you follow Story → Storyboard → First scene.</p>
           </div>
         </div>
         <div className="example-film-grid">
@@ -560,19 +572,49 @@ function App(){
             <span className="example-tag">ORAL MEMORY</span>
             <strong>Elder at dawn</strong>
             <p>Luganda · oral tradition · 1–2 scenes. Template seeds language, era and character continuity.</p>
-            <button type="button" className="ghost-button" onClick={()=>{ const t=heritageTemplates.find(x=>x.id==='oral-elder'); if(t){ applyTemplate(t); navigate('studio'); } }}>Start this path →</button>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('oral-elder')}>Start this path →</button>
           </article>
           <article className="example-film-card">
             <span className="example-tag">DOCUMENTED</span>
             <strong>Named place, dated past</strong>
             <p>History-led short with research notes and clear oral vs documented labeling.</p>
-            <button type="button" className="ghost-button" onClick={()=>{ const t=heritageTemplates.find(x=>x.id==='documented-history'||x.storyType==='historical'); if(t){ applyTemplate(t); navigate('studio'); } else { setShowTemplates(true); navigate('studio'); } }}>Start this path →</button>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('documented-history')}>Start this path →</button>
           </article>
           <article className="example-film-card">
             <span className="example-tag">9:16 SOCIAL</span>
             <strong>Vertical heritage reel</strong>
             <p>Short vertical film for social platforms — still culturally grounded.</p>
-            <button type="button" className="ghost-button" onClick={()=>{ const t=heritageTemplates.find(x=>x.id==='vertical-heritage'||x.format==='9:16'); if(t){ applyTemplate(t); navigate('studio'); } else { setShowTemplates(true); navigate('studio'); } }}>Start this path →</button>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('vertical-heritage')}>Start this path →</button>
+          </article>
+          <article className="example-film-card">
+            <span className="example-tag">GHANA</span>
+            <strong>Cloth &amp; memory</strong>
+            <p>Twi · oral tradition. An elder weaver explains a pattern’s meaning to the next generation.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('ghana-kente-memory')}>Start this path →</button>
+          </article>
+          <article className="example-film-card">
+            <span className="example-tag">ETHIOPIA</span>
+            <strong>Highland path</strong>
+            <p>Amharic · landscape &amp; belonging. A quiet journey above terraced fields.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('ethiopia-highland-path')}>Start this path →</button>
+          </article>
+          <article className="example-film-card">
+            <span className="example-tag">SENEGAL</span>
+            <strong>Griot at dusk</strong>
+            <p>Wolof · oral performance. A griot begins a story as evening gathers.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('senegal-griots-dusk')}>Start this path →</button>
+          </article>
+          <article className="example-film-card">
+            <span className="example-tag">EGYPT</span>
+            <strong>Nile memory</strong>
+            <p>Egyptian Arabic · inspired / documented. A contemplative moment by the river.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('egypt-nile-memory')}>Start this path →</button>
+          </article>
+          <article className="example-film-card">
+            <span className="example-tag">EDUCATION</span>
+            <strong>Classroom lesson</strong>
+            <p>Teacher + students at a heritage site. Research labels and discussion framing built in.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('classroom-heritage')}>Start this path →</button>
           </article>
         </div>
       </section>
@@ -596,7 +638,7 @@ function App(){
     if(pageName==='projects') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">PROJECT LIBRARY</div><h1>Your films</h1><p>Your films, folders and workspaces.</p></section><ProjectsPanel {...projectProps} visible />{showProduction && <ProductionPanel visible apiFetch={apiFetch} projectId={projectId} scenes={scenes}/>}</div>;
     if(pageName==='heritage') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">HERITAGE BIBLE</div><h1>Heritage Bible</h1><p>Keep the world, research and characters together.</p></section><RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><ResearchPanel {...researchProps} visible /><CharacterBible {...bibleProps} visible /><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
     if(pageName==='story') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">STORY DEVELOPMENT</div><h1>Story</h1><p>Build the story, then send it to Scenes.</p></section><StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
-    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section><Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
+    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section>{scenes.length>=2&&<div className="heritage-callout sequence-helper" role="note"><strong>Continuity tip.</strong> {characters.length?`${characters.length} character profile${characters.length===1?'':'s'} will travel across ${scenes.length} scenes. Use Heritage Bible and Continuity audit to keep faces, clothing and language consistent.`:`You have ${scenes.length} scenes. Add character profiles in Heritage Bible so identity, clothing and language stay consistent across shots.`}</div>}<Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
     if(pageName==='voices') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">CHARACTER VOICES</div><h1>Voices</h1><p>Create dialogue and character voices.</p></section><VoicesPanel visible characters={characters} setCharacters={setCharacters} profile={profile} voiceGenerating={voiceGenerating} voiceAudio={voiceAudio} voiceStatus={voiceStatus} generateCharacterVoice={generateCharacterVoice}/></div>;
     if(pageName==='timeline') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EDITING TIMELINE</div><h1>Timeline</h1><p>Assemble scenes, sound and captions.</p></section><TimelinePanel {...timelineProps} visible /></div>;
     if(pageName==='assets') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">MEDIA LIBRARY</div><h1>Assets</h1><p>Images, clips and audio for this film.</p></section><AssetsPanel authUser={authUser} projectId={projectId} projectName={projectName} assets={assets} assetStatus={assetStatus} refreshAssets={refreshAssets} openAsset={openAsset} deleteAsset={deleteAsset}/></div>;

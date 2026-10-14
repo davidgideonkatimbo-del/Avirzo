@@ -23,7 +23,7 @@ app.post('/api/characters/validate', (req, res) => {
   res.json({ ok: warnings.length === 0, warnings, characters, principle: 'Avirzo uses these fields as continuity constraints. They guide generation; they do not guarantee identical faces from an external video model.' });
 });
 
-app.post('/api/storyboard', (req, res) => {
+app.post('/api/storyboard', async (req, res) => {
   const story = String(req.body?.story || '').trim();
   const era = String(req.body?.era || 'pre1994');
   const storyType = String(req.body?.storyType || 'inspired');
@@ -37,7 +37,18 @@ app.post('/api/storyboard', (req, res) => {
   const sentences = story.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/).filter(Boolean);
   const chunks = [];
   for (let i = 0; i < sentences.length; i += 2) chunks.push(sentences.slice(i, i + 2).join(' '));
-  const scenes = (chunks.length ? chunks : [story]).slice(0, 12).map((text, i) => ({
+  // Feature path: more scenes for longer sequences (plan-capped). Per-clip still 5–10s at generation.
+  let plan = 'free';
+  try {
+    if (typeof ctx.getUserPlan === 'function' && typeof ctx.authUser === 'function') {
+      const u = await ctx.authUser(req);
+      if (u?.id) plan = await ctx.getUserPlan(u.id);
+    }
+  } catch (_) { /* keep free */ }
+  const maxScenes = typeof ctx.maxStoryboardScenes === 'function' ? ctx.maxStoryboardScenes(plan) : 24;
+  const requested = Math.min(maxScenes, Math.max(1, Number(req.body?.maxScenes) || maxScenes));
+  const source = chunks.length ? chunks : [story];
+  const scenes = source.slice(0, requested).map((text, i) => ({
     id: `scene-${Date.now()}-${i + 1}`,
     number: i + 1,
     title: `Scene ${i + 1}`,
@@ -51,7 +62,12 @@ app.post('/api/storyboard', (req, res) => {
     camera: i === 0 ? 'Wide tracking' : 'Slow dolly',
     status: 'draft'
   }));
-  res.json({ scenes });
+  res.json({
+    scenes,
+    maxScenes,
+    plan,
+    message: source.length > requested ? `Storyboard capped at ${requested} scenes for your plan. Upgrade for longer features.` : undefined
+  });
 });
 
 app.get('/api/heritage-bible/template', (req, res) => res.json({ fields: ['name','role','age','community','clan','language','appearance','clothing','occupation','relationships','notes','voiceId','voiceNotes'], principle: 'Define characters once and carry the profile into every scene.' }));

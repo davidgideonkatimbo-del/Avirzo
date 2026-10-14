@@ -12,6 +12,12 @@ const QUALITY_PRESETS = [
   { id: 'high', label: 'High', note: 'Slower encode · CRF 18 — masters & festivals' }
 ];
 
+const SOCIAL_PRESETS = [
+  { id: 'reels', label: 'Reels / TikTok / Shorts', format: '9:16', captionMode: 'burn', quality: 'standard', note: 'Vertical · burned captions · platform-ready' },
+  { id: 'youtube', label: 'YouTube / festival', format: '16:9', captionMode: 'soft', quality: 'high', note: 'Landscape · soft captions · higher encode' },
+  { id: 'whatsapp', label: 'WhatsApp share', format: '9:16', captionMode: 'burn', quality: 'draft', note: 'Vertical · light file · fast share' }
+];
+
 export function TimelinePanel({
   visible,
   timeline,
@@ -22,9 +28,16 @@ export function TimelinePanel({
   addAudioTrack, updateAudio, removeAudio,
   addCaption, updateCaption, removeCaption,
   exporting, exportFilm, exportUrl, exportSrt, projectName,
-  format
+  format,
+  setFormat
 }) {
   if (!visible) return null;
+
+  function applySocialPreset(preset) {
+    if (typeof setFormat === 'function' && preset.format) setFormat(preset.format);
+    if (typeof setCaptionMode === 'function') setCaptionMode(preset.captionMode);
+    if (typeof setExportQuality === 'function') setExportQuality(preset.quality);
+  }
 
   async function shareFinishedVideo() {
     if (!exportUrl) return;
@@ -77,6 +90,20 @@ export function TimelinePanel({
         <button className="generate" type="button" onClick={exportFilm} disabled={exporting || !timeline.length}>
           {exporting ? 'Exporting film…' : 'Export assembled film →'}
         </button>
+      </div>
+
+      {/* Phase A — light sequence helper (reuses existing timeline + export; no new pipeline) */}
+      <div className="heritage-callout sequence-helper" role="note">
+        <strong>Feature sequence.</strong>{' '}
+        {timeline.length >= 2
+          ? (() => {
+              const lo = Math.round(timeline.length * 5 / 60 * 10) / 10;
+              const hi = Math.round(timeline.length * 10 / 60 * 10) / 10;
+              return `You have ${timeline.length} scenes. Export stitches them into one film (~${lo}–${hi} min at 5–10s/clip). Studio plans allow up to ~200 scenes / 90 min assembled. Add dialogue or music, then export.`;
+            })()
+          : timeline.length === 1
+            ? 'One scene is ready. Build a longer storyboard (more sentences → more scenes) and generate them to assemble a feature-length sequence.'
+            : 'Build a storyboard and generate scenes. Longer stories produce more scenes — that is how feature length is built (many short clips, one export).'}
       </div>
 
       <div className="timeline-track">
@@ -160,6 +187,28 @@ export function TimelinePanel({
         </div>
       </div>
 
+      {/* Phase B — one-tap social / platform presets (sets existing format/caption/quality only) */}
+      <div className="export-package card-inset social-presets">
+        <div className="eyebrow">SHARE PRESETS</div>
+        <h3>Platform-ready package</h3>
+        <p className="export-package-lead">
+          One tap sets format, captions and quality for common destinations. Then export as usual.
+        </p>
+        <div className="export-option-grid">
+          {SOCIAL_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="export-option-card"
+              onClick={() => applySocialPreset(p)}
+            >
+              <strong>{p.label}</strong>
+              <small>{p.note}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="export-package card-inset">
         <div className="eyebrow">EXPORT PACKAGE</div>
         <h3>Delivery options</h3>
@@ -214,22 +263,42 @@ export function TimelinePanel({
       </div>
 
       {exportUrl && (
-        <div className="export-result heritage-callout">
+        <div className="export-result heritage-callout watch-card">
           <div className="export-result-head">
             <div>
-              <strong>🎬 Film export ready.</strong>
-              <p className="muted">Your finished film is ready to share. On Android and iOS, Share Video opens the system share sheet when supported.</p>
+              <div className="eyebrow">WATCH · SHARE</div>
+              <strong>{projectName || 'Avirzo film'}</strong>
+              <p className="muted">
+                Created with Avirzo — African Cinema Studio. Heritage-first short ready for platforms.
+                On Android and iOS, Share video opens the system sheet when supported.
+              </p>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                Format {format || '16:9'} · captions {captionMode} · quality {exportQuality}
+              </p>
             </div>
             <div className="share-actions">
               <button type="button" className="generate" onClick={shareFinishedVideo}>Share video</button>
               <a className="download" href={exportUrl} target="_blank" rel="noreferrer" download>Download MP4</a>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard?.writeText(exportUrl);
+                    window.alert('Video link copied.');
+                  } catch {
+                    window.alert('Could not copy link. Use Download or Share video.');
+                  }
+                }}
+              >
+                Copy link
+              </button>
             </div>
           </div>
           {exportSrt && (
-            <>
-              {' · '}
+            <div style={{ marginTop: 8 }}>
               <button type="button" className="linkish" onClick={downloadSrt}>Download captions.srt</button>
-            </>
+            </div>
           )}
         </div>
       )}
