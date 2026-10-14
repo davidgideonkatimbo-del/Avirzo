@@ -1,41 +1,27 @@
-AVIRZO v2.9.9 — GITHUB UPLOAD PACKAGE
+AVIRZO v2.11.1 — RELEASE GATE REPAIR
 
-IMPORTANT:
-This package already has the correct repository directory structure.
-Do NOT upload the files from client/src or server/src directly into the GitHub root.
+This package includes the complete application source and a GitHub Actions release workflow at:
+  .github/workflows/release-gate.yml
 
-Correct structure:
-  client/src/...        -> stays inside client/src
-  server/src/...        -> stays inside server/src
-  server/package.json   -> stays inside server
-  client/package.json   -> stays inside client
-  scripts/...            -> stays inside scripts
+IMPORTANT: upload the CONTENTS of the extracted avirzo folder into the existing GitHub repository root. Preserve all folders, including the hidden .github folder. Do not upload the ZIP file itself and do not create an extra nested avirzo/avirzo folder.
 
-BEST METHOD:
-1. Extract this ZIP on your computer.
-2. Open the extracted Avirzo folder.
-3. In GitHub, open the Avirzo repository.
-4. Use Add file -> Upload files.
-5. Drag the CONTENTS of this extracted folder into the upload area while preserving folders.
-6. Commit to main.
-7. Before deploying Render, confirm the GitHub root shows folders named:
-      client
-      server
-      scripts
-   and files such as Dockerfile, package.json, render.yaml, supabase.sql.
-8. Open server and confirm it contains:
-      package.json
-      src
-9. Open client and confirm it contains:
-      package.json
-      src
-      vite.config.js
-      index.html
+Before committing, verify the root has:
+  .github/workflows/release-gate.yml
+  client/
+  server/
+  scripts/
+  package.json
+  Dockerfile
+  render.yaml
+  supabase.sql
 
-DO NOT:
-- Upload the ZIP file itself to GitHub.
-- Upload client/src files directly to the repository root.
-- Upload server/src files directly to the repository root.
-- Create an extra Avirzo/Avirzo nested folder.
+The source-of-truth release version is 2.11.1 in root package.json, client/package.json, server/package.json, and server/src/services/core.js. The release tests verify those versions agree.
 
-Render should be deployed only after this structure is confirmed. For the current procedure, deploy the web service first and do not deploy the paid background worker until we explicitly decide to enable it.
+After uploading and committing to main:
+1. Open GitHub -> Actions -> Avirzo Release Gate.
+2. Open the newest run and confirm Automated release tests, Server syntax checks, Render certification, and Production client build all pass.
+3. Only then deploy the web service on Render.
+
+Lockfile note: this archive does not include a fabricated package-lock.json. Generate a real lockfile from a networked development environment using npm install, test it, then commit package-lock.json before switching CI/Docker to npm ci. The current Dockerfile and CI intentionally use npm install while no lockfile exists.
+
+Do not enable the paid background worker unless separately approved. Preserve Avirzo's scene-by-scene film workflow; this release does not replace it with single-prompt full-film generation.

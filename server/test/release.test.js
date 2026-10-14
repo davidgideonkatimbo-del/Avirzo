@@ -199,20 +199,20 @@ test('projects load on sign-in and survive sign-out/sign-in', () => {
 });
 
 
-test('v2.10.0 first-film path and last-saved are present', () => {
+test('v2.11.1 first-film path and last-saved are present', () => {
   const main = read('client/src/main.jsx');
   assert.match(main, /function firstFilmStep\(\)/);
   assert.match(main, /function renderFirstFilmStrip\(\)/);
   assert.match(main, /Last saved/);
   assert.match(main, /example-films/);
-  assert.match(main, /STUDIO · v2\.11\.0/);
+  assert.match(main, /STUDIO · v2\.11\.1/);
   assert.match(main, /setLastSavedAt/);
   const core = read('server/src/services/core.js');
-  assert.match(core, /APP_VERSION = '2\.11\.0'/);
+  assert.match(core, /APP_VERSION = '2\.11\.1'/);
   const html = read('client/index.html');
   assert.match(html, /Opening Avirzo/);
   const sw = read('client/public/sw.js');
-  assert.match(sw, /avirzo-static-v2\.11\.0/);
+  assert.match(sw, /avirzo-static-v2\.11\.1/);
 });
 
 

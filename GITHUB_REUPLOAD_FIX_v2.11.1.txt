@@ -1,0 +1,12 @@
+AVIRZO v2.11.1 — IMPORTANT GITHUB SYNC FIX
+
+The four failures in the supplied GitHub Actions screenshots came from a mismatch between the old files still in the GitHub repository and the v2.11.1 release package:
+
+1. server/test/optimizations.test.js imports an export that is not present in the current continuity service. This obsolete test file is not part of this release package. Delete it from GitHub (server/test/optimizations.test.js) if it is still present in the repository. Do not delete continuity.js or the current release.test.js.
+2. client/public/sw.js must use the release cache name avirzo-static-v2.11.1. This package has that value.
+3. package.json, client/package.json, server/package.json, and server/src/services/core.js must all use version 2.11.1. This package has those values.
+4. server/test/release.test.js must be the current v2.11.1 version, not the older v2.10.0 test. This package has the v2.11.1 test.
+
+IMPORTANT: Uploading files over GitHub does not automatically delete files that are absent from the ZIP. After uploading the ZIP contents, manually delete the obsolete server/test/optimizations.test.js file if it remains in GitHub, and commit that deletion along with the replacements.
+
+Then run GitHub Actions > Avirzo Release Gate. The current package's local test command is: node --test server/test/*.test.js

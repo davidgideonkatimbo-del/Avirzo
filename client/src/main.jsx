@@ -492,7 +492,7 @@ function App(){
   function renderStudio(){
     return <>
       <section className="page-heading studio-heading">
-        <div className="eyebrow">STUDIO · v2.11.0</div>
+        <div className="eyebrow">STUDIO · v2.11.1</div>
         <div className="studio-title-row">
           <div>
             <h1>Make your film.</h1>
