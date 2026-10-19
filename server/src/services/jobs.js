@@ -130,11 +130,22 @@ export function createJobService({ supabaseAdmin, requireDurable = false }) {
     return local || null; // full local row (payload intact) for internal generation polling
   }
 
+  // Latest generation job a user started with this idempotency key (kept in the job payload; no schema change).
+  async function findByIdempotencyKey(userId, key) {
+    if (!key) return null;
+    if (durable) {
+      const { data, error } = await supabaseAdmin.from('avirzo_jobs').select('id,status,provider_task_id,created_at').eq('user_id', userId).eq('type', 'video_generation').eq('payload->>idempotencyKey', String(key)).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!error) return data || null;
+      if (requireDurable) throw error;
+    }
+    return [...memoryJobs.values()].filter(x => x.user_id === userId && x.type === 'video_generation' && x.payload?.idempotencyKey === String(key)).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+  }
+
   async function queueDepth() {
     if (!durable) return 0;
     const { count, error } = await supabaseAdmin.from('avirzo_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').eq('type', 'film_export');
     if (error) { if (requireDurable) throw error; return null; } return count || 0;
   }
 
-  return { create, update, get, list, findByProviderTask, publicJob, claimNext, activeProviderJobs, resultUrl, recentCompleted, queueDepth, durable };
+  return { create, update, get, list, findByProviderTask, findByIdempotencyKey, publicJob, claimNext, activeProviderJobs, resultUrl, recentCompleted, queueDepth, durable };
 }

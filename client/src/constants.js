@@ -5,6 +5,9 @@ export const cameras = ['Slow dolly', 'Wide tracking', 'Handheld', 'Static', 'Cr
 export const formats = ['16:9', '9:16'];
 export const durations = ['5 sec', '10 sec'];
 
+/** Scene-action budget inside Avirzo's 1000-character video prompt (mirrors server SCENE_PROMPT_LIMITS). */
+export const SCENE_PROMPT_LIMITS = { comfortable: 220, max: 370 };
+
 export const heritageEras = [
   { id: 'pre1994', label: 'Heritage · Before 1994', note: 'Default heritage setting; avoid post-1994 references.' },
   { id: 'precolonial', label: 'Pre-colonial', note: 'Ground the story in the specified society and period.' },
@@ -79,7 +82,7 @@ export const bugandaResearch = {
 };
 
 /** Guided heritage film templates — premium onboarding */
-export const heritageTemplates = [
+const rawHeritageTemplates = [
   {
     id: 'oral-elder',
     title: 'Oral Tradition Short',
@@ -181,44 +184,6 @@ export const heritageTemplates = [
     ]
   },
   {
-    id: 'independence-portrait',
-    title: 'Independence Era Portrait',
-    eyebrow: 'NATIONHOOD',
-    description: 'A character-driven portrait set in a specified country and decade of independence or early post-independence.',
-    icon: '🌅',
-    africanProfile: 'kenya-en',
-    era: 'independence',
-    storyType: 'inspired',
-    style: 'Cinematic',
-    camera: 'Handheld',
-    format: '16:9',
-    duration: '5 sec',
-    historicalNotes: 'Kenya, early independence decade. Ground architecture, clothing, and public space in the period; avoid anachronistic technology.',
-    story: 'A young teacher walks through a Nairobi neighbourhood at the start of a school day in the early years of independence. She carries books, greets neighbours, and pauses at a notice board where the new nation’s hopes are still being written into daily life.',
-    research: {
-      ...emptyResearch,
-      location: 'Nairobi, Kenya',
-      period: 'Early independence era (specify decade in notes)',
-      focus: 'Urban neighbourhood life, education, period clothing and transport',
-      uncertainties: 'Confirm decade-specific details before treating them as documentary fact.',
-      sources: []
-    },
-    characters: [
-      {
-        ...emptyCharacter,
-        name: 'Wanjiku',
-        role: 'Teacher',
-        age: '28',
-        community: 'Kenyan',
-        language: 'Kenyan English / Kiswahili',
-        appearance: 'Composed, purposeful',
-        clothing: 'Modest early-independence professional dress',
-        occupation: 'Primary school teacher',
-        visualIdentity: 'Neat hair, books under arm, steady gaze'
-      }
-    ]
-  },
-  {
     id: 'vertical-heritage',
     title: 'Vertical Heritage Reel',
     eyebrow: '9:16 SOCIAL',
@@ -252,171 +217,6 @@ export const heritageTemplates = [
         appearance: 'Natural, grounded presence',
         clothing: 'Period-appropriate attire for the community',
         visualIdentity: 'Strong silhouette against the landscape'
-      }
-    ]
-  },
-  /* Phase A — new regional heritage templates (additive) */
-  {
-    id: 'ghana-kente-memory',
-    title: 'Ghana · Cloth & Memory',
-    eyebrow: 'ORAL MEMORY',
-    description: 'A weaver or elder explains a kente pattern’s meaning to a younger relative. Oral tradition, not invented history.',
-    icon: '🧵',
-    africanProfile: 'ghana-tw',
-    era: 'precolonial',
-    storyType: 'oral',
-    style: 'Historical drama',
-    camera: 'Slow dolly',
-    format: '16:9',
-    duration: '5 sec',
-    historicalNotes: 'Akan cultural setting. Treat pattern meanings as living oral tradition; do not invent royal genealogies or exact historical dates.',
-    story: 'In a courtyard workshop, an elder weaver shows a younger relative a strip of kente. Fingers trace the pattern while the elder speaks of the meaning handed down in the family — a story of patience, status, and memory woven into cloth.',
-    research: {
-      ...emptyResearch,
-      location: 'Akan region / specified Ghanaian community',
-      period: 'Pre-colonial / living tradition',
-      focus: 'Weaving tools, courtyard architecture, cloth patterns, intergenerational teaching',
-      oralTraditions: 'Pattern meanings and family stories are oral tradition unless a published source establishes them as documented history.',
-      uncertainties: 'Do not invent specific royal lineages or dated events without sources.',
-      sources: []
-    },
-    characters: [
-      {
-        ...emptyCharacter,
-        name: 'Nana Adwoa',
-        role: 'Elder weaver / storyteller',
-        age: '60s–70s',
-        community: 'Akan',
-        language: 'Twi',
-        appearance: 'Calm, practised hands, measured presence',
-        clothing: 'Cloth appropriate to the community and period',
-        visualIdentity: 'Strong hands on the loom or cloth, quiet authority',
-        continuityNotes: 'Keep pre-modern tools and courtyard setting unless the story moves period.'
-      },
-      {
-        ...emptyCharacter,
-        name: 'Kwame',
-        role: 'Young relative / listener',
-        age: '12–16',
-        community: 'Akan',
-        language: 'Twi',
-        appearance: 'Attentive, learning posture',
-        clothing: 'Simple period-appropriate attire',
-        visualIdentity: 'Youthful face turned toward the elder and the cloth'
-      }
-    ]
-  },
-  {
-    id: 'ethiopia-highland-path',
-    title: 'Ethiopia · Highland Path',
-    eyebrow: 'LANDSCAPE & MEMORY',
-    description: 'A quiet journey on a highland path. Landscape, clothing and movement grounded in Ethiopian highland context.',
-    icon: '⛰',
-    africanProfile: 'ethiopia-am',
-    era: 'pre1994',
-    storyType: 'inspired',
-    style: 'Cinematic',
-    camera: 'Wide tracking',
-    format: '16:9',
-    duration: '5 sec',
-    historicalNotes: 'Ethiopian highland setting. Specify community and decade. Avoid inventing political events as backdrop without sources.',
-    story: 'A solitary figure walks a stone path above terraced fields. Clouds move across the highland sky as the path turns toward a distant church or settlement — a moment of journey and belonging rather than a dated historical claim.',
-    research: {
-      ...emptyResearch,
-      location: 'Ethiopian highlands / specified community',
-      period: 'Pre-1994 or custom',
-      focus: 'Highland landscape, terracing, traditional architecture, clothing appropriate to community and era',
-      uncertainties: 'Specify region and period; do not invent religious or political events without sources.',
-      sources: []
-    },
-    characters: [
-      {
-        ...emptyCharacter,
-        name: 'Abebe',
-        role: 'Traveller / witness',
-        age: '30s–40s',
-        community: 'Highland Ethiopian',
-        language: 'Amharic',
-        appearance: 'Steady gait, weathered by the path',
-        clothing: 'Period- and community-appropriate highland attire',
-        visualIdentity: 'Silhouette against highland sky and terraces'
-      }
-    ]
-  },
-  {
-    id: 'senegal-griots-dusk',
-    title: 'Senegal · Griot at Dusk',
-    eyebrow: 'ORAL MEMORY',
-    description: 'A griot begins a story as evening gathers. Oral tradition framed as living performance, not verified chronology.',
-    icon: '🥁',
-    africanProfile: 'senegal-wo',
-    era: 'precolonial',
-    storyType: 'oral',
-    style: 'Historical drama',
-    camera: 'Handheld',
-    format: '16:9',
-    duration: '5 sec',
-    historicalNotes: 'Wolof / Senegambian cultural setting. Present the performance as oral tradition. Do not invent specific historical battles or genealogies as fact.',
-    story: 'At the edge of a compound as the light softens, a griot settles with an instrument. Listeners draw near. The first lines of a remembered story rise — tradition performed in the present, not a dated chronicle.',
-    research: {
-      ...emptyResearch,
-      location: 'Senegambia / specified Wolof or related community',
-      period: 'Living oral tradition / pre-colonial framing',
-      focus: 'Compound architecture, evening light, instruments, audience posture, clothing',
-      oralTraditions: 'Griot performance and remembered lineages are oral tradition; label them clearly.',
-      uncertainties: 'Do not invent exact genealogies or battle accounts without published sources.',
-      sources: []
-    },
-    characters: [
-      {
-        ...emptyCharacter,
-        name: 'Bamba',
-        role: 'Griot / storyteller',
-        age: '50s–60s',
-        community: 'Wolof',
-        language: 'Wolof',
-        appearance: 'Focused, performance-ready presence',
-        clothing: 'Period-appropriate attire for a public storyteller',
-        visualIdentity: 'Instrument and posture at the centre of the circle',
-        continuityNotes: 'Keep the compound and evening setting consistent across shots.'
-      }
-    ]
-  },
-  {
-    id: 'egypt-nile-memory',
-    title: 'Egypt · Nile Memory',
-    eyebrow: 'DOCUMENTED / INSPIRED',
-    description: 'A contemplative moment by the Nile. Ground architecture and landscape in named places; keep creative reconstruction labeled.',
-    icon: '🌊',
-    africanProfile: 'egypt-ar',
-    era: 'ancient',
-    storyType: 'inspired',
-    style: 'Documentary',
-    camera: 'Crane reveal',
-    format: '16:9',
-    duration: '5 sec',
-    historicalNotes: 'Egyptian setting. Prefer named places and published descriptions for architecture and landscape. Label any reconstructed daily life as inspired, not verified detail.',
-    story: 'Along a stretch of the Nile, light moves across water and bank. A figure pauses at the edge — a quiet witness to the river’s continuity. Architecture and landscape stay within documented forms; personal emotion remains interpretive.',
-    research: {
-      ...emptyResearch,
-      location: 'Nile valley / specified Egyptian site',
-      period: 'Ancient or specified era',
-      focus: 'River landscape, bank vegetation, architecture consistent with documented forms for the chosen period',
-      verifiedFacts: 'Prefer published archaeological and heritage descriptions for places and structures.',
-      uncertainties: 'Do not invent dialogue, exact daily routines, or unrecorded events as fact.',
-      sources: []
-    },
-    characters: [
-      {
-        ...emptyCharacter,
-        name: 'Layla',
-        role: 'Witness / traveller',
-        age: '20s–30s',
-        community: 'Egyptian',
-        language: 'Egyptian Arabic',
-        appearance: 'Quiet, observant presence',
-        clothing: 'Attire appropriate to the chosen period and community',
-        visualIdentity: 'Figure held against river light and bank'
       }
     ]
   },
@@ -471,6 +271,89 @@ export const heritageTemplates = [
     ]
   },
   {
+    id: 'kibuuka-legend',
+    title: 'Legend Thriller: Kibuuka Omumbale',
+    eyebrow: 'LEGEND · OPEN ENDING',
+    description: 'A short suspense film from the Ganda legend of the hidden war spirit. Framed as oral tradition, with an open ending.',
+    icon: '🌫',
+    africanProfile: 'uganda-lg',
+    era: 'precolonial',
+    storyType: 'folklore',
+    style: 'Cinematic',
+    camera: 'Crane reveal',
+    format: '16:9',
+    duration: '5 sec',
+    historicalNotes: 'Buganda legend of Kibuuka, war spirit (omubaale), told as oral tradition. Setting: Mbaale, Mawokota, Mpigi, with misty hills and papyrus wetlands. Pre-colonial Ganda world: bark-cloth wraps, reed and thatch huts, spears, shields and bows. No guns, vehicles, plastics or modern objects. Not documented history: do not invent dates or real quotations.',
+    story: 'Kibuuka, the war spirit of Buganda, is sent to help the king against Bunyoro. He fights from the mist above Mbaale hill, striking from the clouds, bound by one law: the enemy must never learn where he hides.\n\nAt night, Bunyoro scouts creep through the grass and search the hills. They find nothing. Spears fall from empty cloud, and their warriors scatter.\n\nIn the Baganda camp sits Nyakato, a Bunyoro woman taken captive. She says little and watches everything. As she watches the sky and the lone tree on the hill, she understands what the Baganda are guarding.\n\nBefore dawn she slips away through the papyrus, water at her ankles, and crosses the lines to her own people. She points across the dark valley to one tree in the mist.\n\nAt first light, the Bunyoro archers raise their bows toward it.\n\nAt Mbaale, the rock still holds his shrine.',
+    research: {
+      ...emptyResearch,
+      location: 'Mbaale, Mawokota, Mpigi District, Buganda, Uganda',
+      period: 'Pre-colonial; undated legend from Buganda\'s early kingdom',
+      focus: 'Oral tradition of Kibuuka, war spirit of the Baganda, and his shrine at Mbaale',
+      verifiedFacts: 'The shrine of the war-god Kibuuka at Mbaale ("the Rock") was a major focus of patriotic sentiment in Buganda (C. Wrigley, Kingship and State). Relics attributed to Kibuuka were transferred to the Uganda Museum, Kampala, in 1962 (Cambridge MAA catalogue). The Kibuuka Omumbaale heritage site is associated with the Ndiga clan and is being developed with Buganda Kingdom support.',
+      materialCulture: 'Reed-and-thatch huts, woven fences, bark-cloth wraps, wooden spears, hide shields, bent-wood bows, clay pots. No modern objects.',
+      oralTraditions: 'Kibuuka is told as a balubaale (younger brother of Mukasa) sent to help King Nakibinge against Bunyoro, fighting from the clouds or a tree. A captive woman reveals his hiding place. Versions differ on the woman, the battle site and his end.',
+      uncertainties: 'No documented dates. Accounts differ on the captive (a captive vs. a Munyoro concubine), the battle site (Mbaale hill vs. Bulemezi) and his end (killed by an arrow, or body never found). The captive woman\'s name Nyakato is invented for the film. Verify with the Ndiga clan, Buganda cultural custodians and a Runyoro speaker.',
+      sources: [
+        { title: 'Wrigley, Kingship and State: The Buganda Dynasty (Cambridge University Press)', url: 'https://www.cambridge.org/core/books/kingship-and-state/genesis/D72605BCF9A6E83704A8EB6E5F9ED9F7' },
+        { title: 'Cambridge MAA: Kibuka relics catalogue', url: 'https://collections.maa.cam.ac.uk/photographs/432520' },
+        { title: 'allAfrica: Buganda Kingdom applauds Ndiga clan (Kibuuka Omumbaale site)', url: 'https://allafrica.com/stories/202605070598.html' }
+      ]
+    },
+    worldBible: {
+      locations: 'Mbaale hill with one large lone tree above drifting mist; papyrus wetlands below; a reed-and-thatch war camp; a rocky hilltop that holds the shrine.',
+      objects: 'Kibuuka\'s leopard-pattern shield and spear (same design every shot); Bunyoro bows and quivers; torches; bark-cloth wraps.',
+      costumes: 'Bark-cloth wraps in earth tones; leather arm guards on archers; plain wrap for the captive woman. No modern fabric.',
+      architecture: 'Round reed-and-thatch huts, woven fences. Everything handmade from natural materials.',
+      culturalPractices: 'Told as oral tradition. The central rule is that Kibuuka\'s hiding place must stay secret.',
+      musicSoundscape: 'Low drums, a single endongo or ndingidi thread, long silences, night insects, torch crackle, wind, reeds, bowstrings.',
+      languageRules: 'Minimal dialogue. Short Luganda narration only, checked by a Luganda speaker.',
+      visualRules: 'Blue-grey dawn mist against warm firelight orange. Kibuuka mostly silhouette, face never fully shown. No gore, no visible death. Dignified, grounded realism.',
+      familyStructure: 'Baganda defend their kingdom under their king; Bunyoro is the rival kingdom; the captive woman is separated from her own people.',
+      taboosAndSensitivities: 'Kibuuka is a revered war spirit: no mockery or horror-monster framing. Mark the story as legend, not documented history. Have a Muganda cultural reader review before publishing.',
+      continuityLocks: 'Kibuuka\'s shield design never changes\nKibuuka\'s face is never fully shown\nThe lone tree on the hill looks the same in every shot\nThe captive woman wears the same plain bark-cloth wrap throughout\nNo modern objects anywhere',
+      relationships: 'Kibuuka → protector → Buganda\nNyakato → captive of → the Baganda\nNyakato → seeks → her way home to Bunyoro\nBunyoro commander → hunts → Kibuuka'
+    },
+    characters: [
+      {
+        ...emptyCharacter,
+        name: 'Kibuuka',
+        role: 'War spirit / warrior of legend',
+        age: 'Ageless, appears a man in his prime',
+        community: 'Baganda',
+        language: 'Luganda',
+        appearance: 'Tall, lean, still. Face never fully lit; often half-hidden by mist.',
+        clothing: 'Bark-cloth wrap, leopard-pattern shield, spear. No metal except the spearhead.',
+        visualIdentity: 'Silhouette first, face second; always surrounded by low mist or leaves.',
+        continuityNotes: 'Same shield design in every shot; no helmet.'
+      },
+      {
+        ...emptyCharacter,
+        name: 'Nyakato',
+        role: 'Captive woman and observer (name invented for the film)',
+        age: 'Late 20s',
+        community: 'Banyoro',
+        language: 'Runyoro',
+        appearance: 'Alert eyes, calm posture, hands that notice things.',
+        clothing: 'Plain bark-cloth wrap, bare shoulders, no jewellery.',
+        visualIdentity: 'Moves quietly, always watching, never panics.',
+        relationships: 'Captive of the Baganda; trying to return to her own people.',
+        continuityNotes: 'Same plain wrap throughout. Give her motive and agency, not "betrayer" energy.'
+      },
+      {
+        ...emptyCharacter,
+        name: 'Bunyoro archer commander',
+        role: 'Hunter',
+        age: '40s',
+        community: 'Banyoro',
+        language: 'Runyoro',
+        appearance: 'Lean and patient, bow always strung.',
+        clothing: 'Bark-cloth wrap, quiver, leather arm guard.',
+        visualIdentity: 'Still, watchful, shot from low angles.'
+      }
+    ]
+  },
+  {
     id: 'blank-studio',
     title: 'Blank Studio',
     eyebrow: 'START FRESH',
@@ -490,15 +373,40 @@ export const heritageTemplates = [
   }
 ];
 
+/**
+ * A template may appear only once. Entries are treated as duplicates when they share an id, a title,
+ * or the same opening of their story (case/spacing/punctuation ignored). The first one wins.
+ */
+const normKey = v => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export function dedupeTemplates(list) {
+  const seenId = new Set(), seenTitle = new Set(), seenStory = new Set();
+  const out = [];
+  for (const t of Array.isArray(list) ? list : []) {
+    if (!t || !t.id) continue;
+    const title = normKey(t.title), story = normKey(t.story).slice(0, 120);
+    if (seenId.has(t.id) || (title && seenTitle.has(title)) || (story && seenStory.has(story))) continue;
+    seenId.add(t.id);
+    if (title) seenTitle.add(title);
+    if (story) seenStory.add(story);
+    out.push(t);
+  }
+  return out;
+}
+export const heritageTemplates = dedupeTemplates(rawHeritageTemplates);
+
 /** Phase B — curated community / education packs (ids map to heritageTemplates) */
-export const communityPacks = [
-  { id: 'pack-oral', title: 'Oral memory starter', description: 'Elder + listener shorts across regions.', templateIds: ['oral-elder', 'ghana-kente-memory', 'senegal-griots-dusk'], tag: 'ORAL' },
-  { id: 'pack-documented', title: 'Documented places', description: 'History-led paths with research fields ready.', templateIds: ['documented-history', 'egypt-nile-memory'], tag: 'DOCUMENTED' },
+const rawCommunityPacks = [
+  { id: 'pack-oral', title: 'Oral memory & legend', description: 'Elder, legend and suspense shorts rooted in oral tradition.', templateIds: ['oral-elder', 'folklore-legend', 'kibuuka-legend'], tag: 'ORAL' },
+  { id: 'pack-documented', title: 'Documented places', description: 'History-led path with research fields ready.', templateIds: ['documented-history'], tag: 'DOCUMENTED' },
   { id: 'pack-social', title: 'Vertical social', description: '9:16 heritage reels for platforms.', templateIds: ['vertical-heritage'], tag: '9:16' },
-  { id: 'pack-classroom', title: 'Classroom lesson', description: 'Education-ready film with discussion framing.', templateIds: ['classroom-heritage'], tag: 'EDUCATION' },
-  { id: 'pack-east-west', title: 'East & West Africa', description: 'Uganda, Kenya, Ghana, Nigeria paths.', templateIds: ['oral-elder', 'ghana-kente-memory', 'folklore-legend'], tag: 'REGIONAL' },
-  { id: 'pack-horn-nile', title: 'Horn & Nile', description: 'Ethiopia and Egypt landscape / memory paths.', templateIds: ['ethiopia-highland-path', 'egypt-nile-memory'], tag: 'REGIONAL' }
+  { id: 'pack-classroom', title: 'Classroom lesson', description: 'Education-ready film with discussion framing.', templateIds: ['classroom-heritage'], tag: 'EDUCATION' }
 ];
+const knownTemplateIds = new Set(heritageTemplates.map(t => t.id));
+export const communityPacks = rawCommunityPacks.map(p => ({
+  ...p,
+  templateIds: [...new Set(p.templateIds)].filter(id => knownTemplateIds.has(id))
+}));
+
 
 export const studioModes = [
   { id: 'story', label: 'Story', icon: '🎞' },

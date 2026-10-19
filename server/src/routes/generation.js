@@ -1,4 +1,5 @@
 import { sceneContinuityGuard } from '../services/continuity.js';
+import { createRunwayProvider, providerErrorMessage } from '../services/videoProvider.js';
 
 function normalizeRunwayStatus(raw) {
   const s = String(raw || '').toLowerCase().trim();
@@ -21,19 +22,8 @@ function mapRatio(format) {
   return format === '9:16' ? '720:1280' : '1280:720';
 }
 
-function providerErrorMessage(data, fallback = 'The video provider rejected the request.') {
-  if (!data || typeof data !== 'object') return fallback;
-  return (
-    data.message ||
-    data.error ||
-    data.failure ||
-    data.detail ||
-    (Array.isArray(data.errors) && data.errors[0]?.message) ||
-    fallback
-  );
-}
-
 export function registerRoutes(app, ctx) {
+  const inFlightKeys = new Set(); // idempotency keys whose first request is still running
   const {
     IS_PRODUCTION, supabaseAdmin, africanProfiles, RUNWAY_API, eras, storyTypes, styles, cameras, formats, durations,
     requireProviderUser, requireProviderAuth, requireRunwayKey, runwayHeaders, buildCinematicPrompt,
@@ -105,6 +95,26 @@ export function registerRoutes(app, ctx) {
       return res.status(400).json({ message: 'Could not build a usable video prompt from this scene.' });
     }
 
+    // Idempotency: the same shot attempt (same key) never starts, or charges for, a second clip.
+    const idempotencyKey = String(req.body?.idempotencyKey || '').trim().slice(0, 80);
+    if (idempotencyKey) {
+      const caller = await requireProviderAuth(req, res);
+      if (!caller) return;
+      const flightKey = `${caller.id}:${idempotencyKey}`;
+      if (inFlightKeys.has(flightKey)) return res.status(409).json({ message: 'This shot is already being started. One moment…', duplicate: true });
+      inFlightKeys.add(flightKey);
+      res.on('finish', () => inFlightKeys.delete(flightKey));
+      res.on('close', () => inFlightKeys.delete(flightKey));
+      const prior = await jobs.findByIdempotencyKey(caller.id, idempotencyKey);
+      if (prior && prior.status !== 'failed' && prior.status !== 'canceled') {
+        if (prior.provider_task_id) {
+          return res.status(202).json({ status: 'queued', taskId: prior.provider_task_id, jobId: prior.id, duplicate: true, message: 'This shot is already rendering.' });
+        }
+        // The first request is still being handed to the provider; the client retries shortly with the same key.
+        return res.status(409).json({ message: 'This shot is already being started. One moment…', jobId: prior.id, duplicate: true });
+      }
+    }
+
     // Creator-funded: charge production credits equal to generated seconds (fail closed).
     const providerUser = await requireProviderUser(req, res, 'generation', seconds);
     if (!providerUser) return;
@@ -126,24 +136,13 @@ export function registerRoutes(app, ctx) {
         projectId,
         type: 'video_generation',
         status: 'queued',
-        payload: { sceneNumber, format, duration: seconds, style, camera, creditsCharged: charged }
+        payload: { sceneNumber, format, duration: seconds, style, camera, creditsCharged: charged, ...(idempotencyKey ? { idempotencyKey } : {}) }
       });
 
-      const model = pickGenerationModel(await getUserPlan(providerUser.id), Boolean(ref));
-      const body = {
-        model,
-        promptText: String(promptText).slice(0, 1000),
-        ratio,
-        duration: seconds
-      };
-      if (ref) body.promptImage = ref;
-
-      const response = await fetch(`${RUNWAY_API}/image_to_video`, {
-        method: 'POST',
-        headers: runwayHeaders(),
-        body: JSON.stringify(body)
-      });
-      const data = await response.json().catch(() => ({}));
+      const plan = await getUserPlan(providerUser.id);
+      const provider = createRunwayProvider({ apiBase: RUNWAY_API, headers: runwayHeaders, pickModel: pickGenerationModel });
+      const { response, data, usedReference } = await provider.submit({ promptText, ratio, seconds, ref, plan });
+      if (ref && !usedReference) console.warn('provider rejected reference image; rendered without it');
 
       if (!response.ok) {
         const msg = providerErrorMessage(data, 'The video provider rejected the request.');
@@ -187,8 +186,9 @@ export function registerRoutes(app, ctx) {
         try { await jobs.update(job.id, { status: 'failed', progress: 0, error: error?.message || 'Provider request failed.' }); }
         catch (jobError) { console.error('Could not mark provider job failed:', jobError); }
       }
-      return res.status(502).json({
-        message: error?.message || 'Could not reach the video generation service.',
+      const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      return res.status(timedOut ? 504 : 502).json({
+        message: timedOut ? 'The video provider did not answer in time.' : (error?.message || 'Could not reach the video generation service.'),
         jobId: job?.id || null,
         creditsRefunded: charged || undefined
       });

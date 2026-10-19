@@ -1,3 +1,6 @@
+import { planShots } from '../services/shotPlanner.js';
+import { SCENE_PROMPT_LIMITS } from '../services/videoPrompt.js';
+
 export function registerRoutes(app, ctx) {
   const { IS_PRODUCTION, APP_VERSION, supabase, supabaseAdmin, africanProfiles, voiceLanguageSupport, ELEVEN_MODEL, RUNWAY_API, eras, storyTypes, styles, cameras, formats, durations, requireProviderUser, requireProviderAuth, requireRunwayKey, requireVoiceKey, runwayHeaders, normalizeCharacter, characterContinuityLine, buildCinematicPrompt, persistRemoteAsset, requireAssetCloud, projectStore, safeProjectId, normalizeProject, requireCloudUser, PROJECT_DIR, toSrtTime, acquireExportSlot, ELEVENLABS_API, generationJobs, rateBuckets } = ctx;
 
@@ -34,9 +37,6 @@ app.post('/api/storyboard', async (req, res) => {
   if (!profile) return res.status(400).json({ message: 'Unsupported African cinema profile.' });
   if (!eras[era] || !storyTypes[storyType]) return res.status(400).json({ message: 'Unsupported heritage setting.' });
   if (!story) return res.status(400).json({ message: 'A story is required.' });
-  const sentences = story.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/).filter(Boolean);
-  const chunks = [];
-  for (let i = 0; i < sentences.length; i += 2) chunks.push(sentences.slice(i, i + 2).join(' '));
   // Feature path: more scenes for longer sequences (plan-capped). Per-clip still 5–10s at generation.
   let plan = 'free';
   try {
@@ -47,26 +47,32 @@ app.post('/api/storyboard', async (req, res) => {
   } catch (_) { /* keep free */ }
   const maxScenes = typeof ctx.maxStoryboardScenes === 'function' ? ctx.maxStoryboardScenes(plan) : 24;
   const requested = Math.min(maxScenes, Math.max(1, Number(req.body?.maxScenes) || maxScenes));
-  const source = chunks.length ? chunks : [story];
-  const scenes = source.slice(0, requested).map((text, i) => ({
+  // Shot planner: one visual beat per scene (blank lines in the story mark beats), shot-sized prompts,
+  // a camera move, a suggested clip length and a primary character matched by name.
+  const planned = planShots({ story, characters, maxScenes: requested });
+  const totalBeats = planShots({ story, characters, maxScenes: 100000 }).length;
+  const scenes = planned.map((shot, i) => ({
     id: `scene-${Date.now()}-${i + 1}`,
-    number: i + 1,
-    title: `Scene ${i + 1}`,
-    prompt: text,
+    number: shot.number,
+    title: shot.title,
+    prompt: shot.prompt,
     africanLanguage: profile.language,
     market: profile.market,
     era,
     storyType,
     historicalNotes,
     researchBrief,
-    camera: i === 0 ? 'Wide tracking' : 'Slow dolly',
+    camera: shot.camera,
+    duration: shot.duration,
+    primaryCharacterName: shot.primaryCharacterName,
     status: 'draft'
   }));
   res.json({
     scenes,
     maxScenes,
     plan,
-    message: source.length > requested ? `Storyboard capped at ${requested} scenes for your plan. Upgrade for longer features.` : undefined
+    limits: SCENE_PROMPT_LIMITS,
+    message: totalBeats > requested ? `Storyboard capped at ${requested} scenes for your plan. Upgrade for longer features.` : undefined
   });
 });
 

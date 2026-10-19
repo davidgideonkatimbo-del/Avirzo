@@ -143,11 +143,13 @@ test('project cloud saves are verified against the database before success is re
 });
 
 test('Runway Gen-4.5 uses image_to_video for both text and image generation', () => {
+  // The provider call lives in the video provider adapter (v2.12.6); the route passes pickGenerationModel to it.
   const route = read('server/src/routes/generation.js');
-  assert.match(route, /image_to_video/);
+  const provider = read('server/src/services/videoProvider.js');
   assert.match(route, /pickGenerationModel/);
+  assert.match(provider, /image_to_video/);
+  assert.match(provider, /promptImage/);
   assert.match(read('server/src/services/plans.js'), /return 'gen4\.5'/);
-  assert.match(route, /promptImage/);
 });
 
 test('client save flow requires server verification and generation persists the completed scene', () => {
@@ -158,7 +160,9 @@ test('client save flow requires server verification and generation persists the 
   const single = main.slice(main.indexOf('async function generateScene('), main.indexOf('async function generateAll()'));
   assert.match(single, /Creating a cloud project before rendering/);
   assert.match(single, /saveCurrentToCloud\(\)/);
-  assert.match(single, /projectId:activeProjectId\|\|projectId\|\|null/);
+  // The request body is built by shotRequestBody(); the single-shot call passes the cloud project id it just created.
+  assert.match(single, /shotRequestBody\(working,refImage,refChar,guard,activeProjectId\|\|projectId,scenePrompt\)/);
+  assert.match(main, /projectId:projectIdValue\|\|null/);
   assert.match(single, /Scene \$\{working\.number\} rendered and saved to your cloud project/);
   // Manual Save project confirms the library entry by name.
   assert.match(main, /Saved “\$\{label\}” to your cloud library/);
@@ -214,14 +218,17 @@ test('current release cinematic quality safeguards and first-film path are prese
   assert.match(main, /function renderFirstFilmStrip\(\)/);
   assert.match(main, /Last saved/);
   assert.match(main, /example-films/);
-  assert.match(main, /STUDIO · v2\.12\.4/);
+  // Versions come from package.json, so a release bump never needs a test edit.
+  const version = JSON.parse(read('package.json')).version;
+  const esc = version.replace(/\./g, '\\.');
+  assert.match(main, new RegExp(`STUDIO · v${esc}`));
   assert.match(main, /setLastSavedAt/);
   const core = read('server/src/services/core.js');
-  assert.match(core, /APP_VERSION = '2\.12\.4'/);
+  assert.match(core, new RegExp(`APP_VERSION = '${esc}'`));
   const html = read('client/index.html');
   assert.match(html, /Opening Avirzo/);
   const sw = read('client/public/sw.js');
-  assert.match(sw, /avirzo-static-v2\.12\.4/);
+  assert.match(sw, new RegExp(`avirzo-static-v${esc}`));
 });
 
 
@@ -250,19 +257,21 @@ test('generation normalizes Runway status and maps ratio/duration', () => {
   assert.match(route, /720:1280/);
   assert.match(route, /mapDurationSeconds/);
   assert.match(route, /pickGenerationModel/);
-  assert.match(route, /image_to_video/);
+  assert.match(read('server/src/services/videoProvider.js'), /image_to_video/);
   // Provider success still returns a usable video URL even if archive fails
   assert.match(route, /providerVideoUrl/);
 });
 
 test('client poll accepts succeeded with videoUrl and longer timeout', () => {
+  // The poll loop moved to client/src/generationPoll.js (v2.12.6) and is tested by behaviour in generation-poll.test.js.
   const main = read('client/src/main.jsx');
-  assert.match(main, /maxAttempts\s*=\s*90/);
-  assert.match(main, /cancelled/);
+  const poll = read('client/src/generationPoll.js');
+  assert.match(poll, /maxAttempts\s*=\s*150/); // ~12 minutes, raised from 90 (~7.5 min)
+  assert.match(poll, /cancelled/);
   assert.match(main, /scenePrompt/);
-  assert.match(main, /transientFailures/);
-  assert.match(main, /r\.status===502/);
-  assert.match(main, /Still waiting on the video provider/);
+  assert.match(poll, /transientFailures/);
+  assert.match(poll, /502/);
+  assert.match(poll, /Still waiting on the video provider/);
 });
 
 test('generation coerces unsupported style/camera/duration instead of failing the shot', () => {
@@ -353,6 +362,8 @@ test('batch shot generation commits completed clips incrementally for recovery',
 test('batch generation uses the newly created cloud project ID for generation and media archive', () => {
   const main = read('client/src/main.jsx');
   const batch = main.slice(main.indexOf('async function generateAll()'), main.indexOf('async function pollTask('));
-  assert.match(batch, /projectId:batchProjectId\|\|projectId\|\|null/);
-  assert.match(batch, /persistAsset\(url,'video',`scene-\$\{scene.number\}`,batchProjectId\|\|projectId\)/);
+  // Both the generation request and the media archive get the project id created at the start of the batch.
+  assert.match(batch, /shotRequestBody\(working,refImage,refChar,guard,batchProjectId\|\|projectId,scenePrompt\)/);
+  assert.match(batch, /finalizeShot\(result,`scene-\$\{scene\.number\}`,batchProjectId\|\|projectId\)/);
+  assert.match(main, /persistAsset\(url,'video',label,projectIdForSave\)/);
 });

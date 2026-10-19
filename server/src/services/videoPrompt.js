@@ -33,3 +33,13 @@ export function composeCinematicPrompt({ fixed, scene, extras = [], maxLength = 
   }
   return out.slice(0, maxLength);
 }
+
+/**
+ * Scene-action budget inside the 1000-character provider prompt.
+ * Avirzo's fixed block (shot identity, setting/era, quality rules) is about 600-615 characters,
+ * which leaves roughly 370-388 characters for the scene action itself.
+ * - up to `comfortable`: the action fits and there is usually still room for cultural/character context.
+ * - up to `max`: the action fits whole, but optional context (cultural grounding, characters, World Bible) is dropped.
+ * - above `max`: the end of the scene action is cut off.
+ */
+export const SCENE_PROMPT_LIMITS = Object.freeze({ comfortable: 220, max: 370 });

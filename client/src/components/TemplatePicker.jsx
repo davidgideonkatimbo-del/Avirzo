@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { heritageTemplates, communityPacks } from '../constants';
+import { heritageTemplates, communityPacks, dedupeTemplates } from '../constants';
 
 /**
  * Guided heritage film templates — premium onboarding entry point.
@@ -12,9 +12,9 @@ export function TemplatePicker({ onSelect, onDismiss, visible, apiFetch, onImpor
 
   if (!visible) return null;
 
-  const templatesToShow = packFocus
+  const templatesToShow = dedupeTemplates(packFocus
     ? heritageTemplates.filter((t) => packFocus.templateIds.includes(t.id))
-    : heritageTemplates;
+    : heritageTemplates);
 
   async function handleImportFile(e) {
     const file = e.target.files?.[0];

@@ -1,3 +1,5 @@
+import { pollTask as pollTaskCore } from './generationPoll';
+import { shotError, classifyGenerateFailure, runWithRetry, friendlyFailure, newIdempotencyKey, isNetworkError } from './shotFlow';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -126,6 +128,8 @@ function App(){
   
   function applyTemplate(tpl){
     if(!tpl) return;
+    // A template starts a NEW film. Keeping the open project's id would let autosave overwrite that film with the template.
+    if(projectId){ setProjectId(''); setLastSavedAt(null); lastSavedRef.current=''; setProjectName(tpl.title||'My Avirzo Film'); if(inProjectRoute) navigate('studio'); }
     setActiveTemplateId(tpl.id);
     setShowTemplates(false);
     setMode('story');
@@ -234,7 +238,7 @@ function App(){
 
   async function makeStoryboard(){
     if(!story.trim()) return setMessage('Write a story first.'); setLoadingPlan(true); setMessage('Building your heritage shot list…');
-    try{const r=await apiFetch('/api/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({story,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research})}); const data=await readApiJson(r); if(!r.ok) throw new Error(data.message||'Could not build storyboard.'); setScenes(data.scenes.map((s,i)=>({...s,primaryCharacterId:characters[0]?.id||''}))); setTimeline([]); setExportUrl(''); setMessage(`${data.scenes.length} scenes ready. Open Scenes and generate your first shot.`); setMode('shot');}catch(e){setMessage(e.message)}finally{setLoadingPlan(false)}
+    try{const r=await apiFetch('/api/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({story,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research})}); const data=await readApiJson(r); if(!r.ok) throw new Error(data.message||'Could not build storyboard.'); setScenes(data.scenes.map((s)=>{ const match=characters.find(c=>c.name&&c.name===s.primaryCharacterName); return {...s,primaryCharacterId:(match||characters[0])?.id||''}; })); setTimeline([]); setExportUrl(''); setMessage(`${data.scenes.length} shot${data.scenes.length===1?'':'s'} planned with camera moves and characters. Review each one in Scenes, then generate shot 1 first to check the look.${data.message?` ${data.message}`:''}`); setMode('shot');}catch(e){setMessage(e.message)}finally{setLoadingPlan(false)}
   }
   function updateScene(id,key,value){setScenes(p=>p.map(s=>s.id===id?{...s,[key]:value}:s));}
   function sceneDurationSeconds(value=duration){ const match=String(value).match(/(\d+(?:\.\d+)?)/); return match ? Number(match[1]) : 5; }
@@ -263,6 +267,42 @@ function App(){
     }catch(e){
       return {ready:true,blockers:[],warnings:[e.message||'Continuity check skipped.'],continuityContext:''};
     }
+  }
+  /* Shot helpers: one place for submitting a clip, waiting for it, retrying provider hiccups once and saving the result. */
+  async function submitShot(body,sceneNumber){
+    return runWithRetry(async()=>{
+      // One key per attempt: if the connection drops and we resend, the server returns the same clip instead of charging twice.
+      const keyed={...body,idempotencyKey:newIdempotencyKey(sceneNumber)};
+      let data=null,r=null;
+      for(let send=1;send<=3;send++){
+        try{
+          r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(keyed)});
+          data=await readApiJson(r);
+        }catch(netErr){
+          if(send===3||!isNetworkError(netErr)) throw netErr;
+          await new Promise(res=>setTimeout(res,2000*send));
+          continue;
+        }
+        if(r.status===409&&data?.duplicate&&send<3){ await new Promise(res=>setTimeout(res,2000*send)); continue; }
+        break;
+      }
+      if(!r.ok) throw classifyGenerateFailure(r.status,data);
+      if(!data.taskId) throw shotError(data.message||'Generation started but no task id was returned. Check that RUNWAYML_API_SECRET is set.',{fatal:true});
+      setActiveJobId(data.jobId||'');
+      return await pollTask(data.taskId,data.jobId);
+    },{onRetry:()=>setMessage(`Scene ${sceneNumber}: the video provider could not finish this shot. Retrying once automatically (credits for the failed try are returned)…`)});
+  }
+  async function finalizeShot(result,label,projectIdForSave){
+    const url=result.videoUrl||'';
+    let archived=null;
+    if(result.archivedAsset?.id){ try{ archived={asset:result.archivedAsset,url:await openAsset(result.archivedAsset.id)}; }catch(_){ archived=null; } }
+    if(!archived && url){ try{ archived=await persistAsset(url,'video',label,projectIdForSave); }catch(_){ archived=null; } }
+    const finalUrl=archived?.url||url;
+    if(!finalUrl) throw shotError(result.message||'Generation finished without a video URL.');
+    return {archived,finalUrl};
+  }
+  function shotRequestBody(working,refImage,refChar,guard,projectIdValue,scenePrompt){
+    return {prompt:scenePrompt,style,camera:working.camera||camera||'Slow dolly',duration:working.duration||duration,format,sceneNumber:working.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage||'',referenceCharacter:characterPayload(refChar),projectId:projectIdValue||null,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:working.primaryCharacterId||''};
   }
   async function generateScene(scene){
     if(generating) return setMessage('A scene is already rendering. Wait for it to finish or cancel the job.');
@@ -298,26 +338,9 @@ function App(){
       if(Array.isArray(guard.warnings)&&guard.warnings.length){
         setMessage(`Rendering scene ${scene.number}… (${guard.warnings[0]})`);
       }
-      const scenePrompt=String(working.prompt||working.title||story||'').trim(); if(!scenePrompt) throw new Error('This scene has no prompt text. Add a description or rebuild the storyboard.'); const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scenePrompt,style,camera:working.camera||camera||'Slow dolly',duration:working.duration||duration,format,sceneNumber:working.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage||'',referenceCharacter:characterPayload(refChar),projectId:activeProjectId||projectId||null,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:working.primaryCharacterId||''})});
-      const data=await readApiJson(r);
-      if(!r.ok){
-        if(data.error==='INSUFFICIENT_CREDITS'||(r.status===402&&data.error!=='TRIAL_ENDED')){
-          throw new Error(data.message||'Not enough production credits this month. Upgrade your plan in Billing for a higher monthly allowance.');
-        }
-        if(data.error==='TRIAL_ENDED'){
-          throw new Error(data.message||'Your free month has ended. Choose Creator or Studio in Billing.');
-        }
-        throw new Error(data.message||'Generation request failed.');
-      }
-      if(!data.taskId) throw new Error(data.message||'Generation started but no task id was returned. Check that RUNWAYML_API_SECRET is set.');
-      setActiveJobId(data.jobId||'');
-      const result=await pollTask(data.taskId,data.jobId);
-      const url=result.videoUrl||'';
-      if(!url) throw new Error(result.message||'Generation finished without a video URL.');
-      let archived=null;
-      if(result.archivedAsset?.id){ try{ archived={asset:result.archivedAsset,url:await openAsset(result.archivedAsset.id)}; }catch(_){ archived=null; } }
-      if(!archived && url){ try{ archived=await persistAsset(url,'video',`scene-${working.number}`); }catch(_){ archived=null; } }
-      const finalUrl=archived?.url||url;
+      const scenePrompt=String(working.prompt||working.title||story||'').trim(); if(!scenePrompt) throw new Error('This scene has no prompt text. Add a description or rebuild the storyboard.');
+      const result=await submitShot(shotRequestBody(working,refImage,refChar,guard,activeProjectId||projectId,scenePrompt),working.number);
+      const {archived,finalUrl}=await finalizeShot(result,`scene-${working.number}`);
       let nextScenes=[];
       setScenes(prev=>{
         nextScenes=prev.map(x=>x.id===scene.id?{
@@ -350,7 +373,7 @@ function App(){
       setMessage(`Scene ${working.number} is ready.`);
     }catch(e){
       updateScene(scene.id,'status','failed');
-      setMessage(e.message||'Generation failed.');
+      setMessage(friendlyFailure(e));
     }finally{ setGenerating(false); }
   }
 
@@ -377,9 +400,13 @@ function App(){
           setProjectStatus('Could not create a cloud project yet ('+(saveErr.message||'save failed')+'). Continuing batch generation — save the project after clips finish.');
         }
       }
+      const failedScenes=[];
       for(const scene of workingScenes){ currentScene=scene;
+        // Scenes finished in an earlier run are kept: never re-render (or re-charge) them.
+        if(scene.status==='ready'&&scene.videoUrl) continue;
         setMessage(`Rendering scene ${scene.number} of ${workingScenes.length}…`);
         updateScene(scene.id,'status','rendering');
+        try{
         let working={...scene};
         if(characters.length && !working.primaryCharacterId){
           working={...working, primaryCharacterId:characters[0].id};
@@ -389,18 +416,9 @@ function App(){
         const refImage=await resolveCharacterMedia(refChar,'image');
         const guard=await checkSceneContinuity(working);
         if(!guard.ready){blockedByContinuity=true;updateScene(scene.id,'status','blocked');throw new Error(`Scene ${scene.number} blocked by continuity: ${guard.blockers.join(' ')}`);}
-        const scenePrompt=String(working.prompt||working.title||story||'').trim(); if(!scenePrompt) throw new Error('This scene has no prompt text. Add a description or rebuild the storyboard.'); const r=await apiFetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:scenePrompt,style,camera:working.camera||camera||'Slow dolly',duration:working.duration||duration,format,sceneNumber:working.number,africanProfile,era,storyType,historicalNotes,characters:characters.map(characterPayload),researchBrief:research,referenceImage:refImage||'',referenceCharacter:characterPayload(refChar),projectId:batchProjectId||projectId||null,worldBible,rootsFoundation,continuityContext:guard.continuityContext,primaryCharacterId:working.primaryCharacterId||''})});
-        const data=await readApiJson(r);
-        if(!r.ok) throw new Error(data.message||`Scene ${scene.number} failed.`);
-        if(!data.taskId) throw new Error(data.message||`Scene ${scene.number}: no task id returned. Check RUNWAYML_API_SECRET.`);
-        setActiveJobId(data.jobId||'');
-        const result=await pollTask(data.taskId,data.jobId);
-        const url=result.videoUrl||'';
-        if(!url) throw new Error(result.message||`Scene ${scene.number} finished without a video URL.`);
-        let archived=null;
-        if(result.archivedAsset?.id){ try{ archived={asset:result.archivedAsset,url:await openAsset(result.archivedAsset.id)}; }catch(_){ archived=null; } }
-        if(!archived && url){ try{ archived=await persistAsset(url,'video',`scene-${scene.number}`,batchProjectId||projectId); }catch(_){ archived=null; } }
-        const finalUrl=archived?.url||url;
+        const scenePrompt=String(working.prompt||working.title||story||'').trim(); if(!scenePrompt) throw new Error('This scene has no prompt text. Add a description or rebuild the storyboard.');
+        const result=await submitShot(shotRequestBody(working,refImage,refChar,guard,batchProjectId||projectId,scenePrompt),working.number);
+        const {archived,finalUrl}=await finalizeShot(result,`scene-${scene.number}`,batchProjectId||projectId);
         updateScene(scene.id,'status','ready');
         updateScene(scene.id,'videoUrl',finalUrl);
         if(archived){ updateScene(scene.id,'assetId',archived.asset.id); updateScene(scene.id,'assetStoragePath',archived.asset.storage_path); }
@@ -423,55 +441,25 @@ function App(){
             setLastSavedAt(new Date().toISOString());
           }catch(saveError){ setProjectStatus(`Scene ${working.number} rendered, but project save needs attention: ${saveError.message}`); }
         }
+        }catch(sceneError){
+          // Out of credits, free month over or signed out: every later scene would fail too, so stop here.
+          if(sceneError.fatal||blockedByContinuity) throw sceneError;
+          // One scene failing must not throw away the rest of the film.
+          updateScene(scene.id,'status','failed');
+          failedScenes.push({number:scene.number,message:friendlyFailure(sceneError)});
+          setMessage(`Scene ${scene.number} could not be rendered. Moving on to the next scene…`);
+        }
       }
-      setMessage('All scenes are ready.');
-    }catch(e){ if(currentScene?.id&&!blockedByContinuity) updateScene(currentScene.id,'status','failed'); setMessage(e.message||'The film generation stopped.');}
+      if(failedScenes.length){
+        setMessage(`${workingScenes.length-failedScenes.length} of ${workingScenes.length} scenes are ready. ${failedScenes.length===1?'Scene':'Scenes'} ${failedScenes.map(f=>f.number).join(', ')} could not be rendered: ${failedScenes[0].message} Press Generate film again: finished scenes are kept and only the failed ones are rendered (and charged) again.`);
+      }else{
+        setMessage('All scenes are ready.');
+      }
+    }catch(e){ if(currentScene?.id&&!blockedByContinuity) updateScene(currentScene.id,'status','failed'); setMessage(friendlyFailure(e));}
     finally{setGenerating(false)}
   }
 
-  async function pollTask(taskId,jobId=''){
-    const maxAttempts=90; // ~7.5 minutes
-    let transientFailures=0;
-    for(let i=0;i<maxAttempts;i++){
-      await new Promise(r=>setTimeout(r, i<6 ? 3000 : 5000));
-      let r,d;
-      try{
-        r=await apiFetch(`/api/generate/${encodeURIComponent(taskId)}`);
-        d=await readApiJson(r);
-      }catch(netErr){
-        transientFailures+=1;
-        if(transientFailures>8) throw new Error(netErr.message||'Could not reach the studio while checking generation status.');
-        if(i%3===0) setMessage('Still waiting on the video provider… (connection blip, retrying)');
-        continue;
-      }
-      if(!r.ok){
-        // Transient provider/gateway errors: keep polling instead of failing the shot.
-        if(r.status===408||r.status===425||r.status===429||r.status===502||r.status===503||r.status===504){
-          transientFailures+=1;
-          if(transientFailures>12) throw new Error(d.message||'The video provider stayed unavailable. Try Generate again in a moment.');
-          if(i%3===0) setMessage(d.message||'Provider is busy — still waiting for your shot…');
-          continue;
-        }
-        throw new Error(d.message||'Could not retrieve generation status.');
-      }
-      transientFailures=0;
-      if(jobId) await refreshJobs();
-      const st=String(d.status||'').toLowerCase();
-      if(st==='succeeded'){
-        if(d.videoUrl || d.archivedAsset?.id){ setActiveJobId(''); return d; }
-        // Succeeded without URL yet — rare race; retry a few times then fail.
-        if(i>=5){ setActiveJobId(''); throw new Error(d.message||'Generation succeeded but no video URL was returned.'); }
-        if(i%2===0) setMessage('Shot finished — waiting for the video URL…');
-        continue;
-      }
-      if(st==='failed'||st==='canceled'||st==='cancelled'){
-        setActiveJobId('');
-        throw new Error(d.message||d.failureCode||'Video generation failed.');
-      }
-      if(d.message && i%4===0) setMessage(d.message);
-    }
-    throw new Error('Generation is taking longer than expected. Open Exports & Jobs — the task may still finish.');
-  }
+  function pollTask(taskId,jobId=''){ return pollTaskCore({taskId,jobId,apiFetch,readApiJson,setMessage,setActiveJobId,refreshJobs}); }
   async function generateCharacterPerformance(character){
     const characterImage=await resolveCharacterMedia(character,'image');
     const performanceVideo=await resolveCharacterMedia(character,'performance');
@@ -563,7 +551,7 @@ function App(){
   function renderStudio(){
     return <>
       <section className="page-heading studio-heading">
-        <div className="eyebrow">STUDIO · v2.12.4</div>
+        <div className="eyebrow">STUDIO · v2.12.6</div>
         <div className="studio-title-row">
           <div>
             <h1>Make your film.</h1>
@@ -658,28 +646,10 @@ function App(){
             <button type="button" className="ghost-button" onClick={()=>startFirstFilm('vertical-heritage')}>Start this path →</button>
           </article>
           <article className="example-film-card">
-            <span className="example-tag">GHANA</span>
-            <strong>Cloth &amp; memory</strong>
-            <p>Twi · oral tradition. An elder weaver explains a pattern’s meaning to the next generation.</p>
-            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('ghana-kente-memory')}>Start this path →</button>
-          </article>
-          <article className="example-film-card">
-            <span className="example-tag">ETHIOPIA</span>
-            <strong>Highland path</strong>
-            <p>Amharic · landscape &amp; belonging. A quiet journey above terraced fields.</p>
-            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('ethiopia-highland-path')}>Start this path →</button>
-          </article>
-          <article className="example-film-card">
-            <span className="example-tag">SENEGAL</span>
-            <strong>Griot at dusk</strong>
-            <p>Wolof · oral performance. A griot begins a story as evening gathers.</p>
-            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('senegal-griots-dusk')}>Start this path →</button>
-          </article>
-          <article className="example-film-card">
-            <span className="example-tag">EGYPT</span>
-            <strong>Nile memory</strong>
-            <p>Egyptian Arabic · inspired / documented. A contemplative moment by the river.</p>
-            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('egypt-nile-memory')}>Start this path →</button>
+            <span className="example-tag">LEGEND THRILLER</span>
+            <strong>Kibuuka Omumbale</strong>
+            <p>Luganda · Ganda legend · 6–7 shots. A hidden war spirit, a captive who notices, an open ending.</p>
+            <button type="button" className="ghost-button" onClick={()=>startFirstFilm('kibuuka-legend')}>Start this path →</button>
           </article>
           <article className="example-film-card">
             <span className="example-tag">EDUCATION</span>
@@ -709,7 +679,7 @@ function App(){
     if(pageName==='projects') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">PROJECT LIBRARY</div><h1>Your films</h1><p>Your films, folders and workspaces.</p></section><ProjectsPanel {...projectProps} visible />{showProduction && <ProductionPanel visible apiFetch={apiFetch} projectId={projectId} scenes={scenes}/>}</div>;
     if(pageName==='heritage') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">HERITAGE BIBLE</div><h1>Heritage Bible</h1><p>Keep the world, research and characters together.</p></section><RootsFoundation value={rootsFoundation} onChange={setRootsFoundation} profile={africanProfile} era={era} storyType={storyType}/><WorldBible value={worldBible} onChange={setWorldBible} characters={characters}/><ResearchPanel {...researchProps} visible /><CharacterBible {...bibleProps} visible /><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
     if(pageName==='story') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">STORY DEVELOPMENT</div><h1>Story</h1><p>Build the story, then send it to Scenes.</p></section><StoryComposer mode="story" setMode={setMode} story={story} setStory={setStory} africanProfile={africanProfile} setAfricanProfile={setAfricanProfile} era={era} setEra={setEra} storyType={storyType} setStoryType={setStoryType} historicalNotes={historicalNotes} setHistoricalNotes={setHistoricalNotes} profile={profile} loadingPlan={loadingPlan} makeStoryboard={makeStoryboard} camera={camera} characters={characters} setScenes={setScenes} setMessage={setMessage}/><StoryIntelligencePanel apiFetch={apiFetch} story={story} rootsFoundation={rootsFoundation} characters={characters.map(characterPayload)} research={research} worldBible={worldBible} scenes={scenes} era={era} storyType={storyType} setMessage={setMessage}/></div>;
-    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section>{scenes.length>=2&&<div className="heritage-callout sequence-helper" role="note"><strong>Continuity tip.</strong> {characters.length?`${characters.length} character profile${characters.length===1?'':'s'} will travel across ${scenes.length} scenes. Use Heritage Bible and Continuity audit to keep faces, clothing and language consistent.`:`You have ${scenes.length} scenes. Add character profiles in Heritage Bible so identity, clothing and language stay consistent across shots.`}</div>}<Storyboard scenes={scenes} characters={characters} profile={profile} era={era} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
+    if(pageName==='scenes') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">SCENE BOARD</div><h1>Scenes</h1><p>Plan shots and track continuity.</p></section>{scenes.length>=2&&<div className="heritage-callout sequence-helper" role="note"><strong>Continuity tip.</strong> {characters.length?`${characters.length} character profile${characters.length===1?'':'s'} will travel across ${scenes.length} scenes. Use Heritage Bible and Continuity audit to keep faces, clothing and language consistent.`:`You have ${scenes.length} scenes. Add character profiles in Heritage Bible so identity, clothing and language stay consistent across shots.`}</div>}<Storyboard scenes={scenes} characters={characters} profile={profile} era={era} defaultDuration={duration} generating={generating} generateAll={generateAll} generateScene={generateScene} updateScene={updateScene} moveScene={moveScene} characterForScene={characterForScene}/></div>;
     if(pageName==='voices') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">CHARACTER VOICES</div><h1>Voices</h1><p>Create dialogue and character voices.</p></section><VoicesPanel visible characters={characters} setCharacters={setCharacters} profile={profile} voiceGenerating={voiceGenerating} voiceAudio={voiceAudio} voiceStatus={voiceStatus} generateCharacterVoice={generateCharacterVoice}/></div>;
     if(pageName==='timeline') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">EDITING TIMELINE</div><h1>Timeline</h1><p>Assemble scenes, sound and captions.</p></section><TimelinePanel {...timelineProps} visible /></div>;
     if(pageName==='assets') return <div className="page-stack"><section className="page-heading"><div className="eyebrow">MEDIA LIBRARY</div><h1>Assets</h1><p>Images, clips and audio for this film.</p></section><AssetsPanel authUser={authUser} projectId={projectId} projectName={projectName} assets={assets} assetStatus={assetStatus} refreshAssets={refreshAssets} openAsset={openAsset} deleteAsset={deleteAsset}/></div>;
