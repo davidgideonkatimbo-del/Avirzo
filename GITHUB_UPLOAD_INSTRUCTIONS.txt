@@ -1,0 +1,15 @@
+AVIRZO v2.12.1 — CINEMATIC QUALITY + SCENE HERITAGE MUSIC RELEASE
+
+This release adds scene-by-scene original instrumental music, generated through the ElevenLabs Music API. It carries Roots Foundation and World Bible music notes into the prompt and preserves each generated score as a separate editable timeline track.
+
+Before deploying:
+1. Configure ELEVENLABS_API_KEY as a server-side secret in Render. Music API access requires a qualifying paid ElevenLabs plan. Never put the key in client-side variables.
+2. Confirm Supabase storage bucket avirzo-media and project asset permissions are configured to archive music to saved projects.
+3. Upload the full ZIP contents to the existing repository, including hidden files and .github/workflows. Uploading files does not remove obsolete files already in GitHub.
+4. If the old server/test/optimizations.test.js exists in GitHub and imports non-existent continuity exports, delete that obsolete file in GitHub and commit the deletion. Keep server/src/services/continuity.js and server/test/release.test.js.
+5. Confirm package.json, client/package.json, server/package.json, server/src/services/core.js, client/src/main.jsx, client/public/sw.js, and server/test/release.test.js all agree on v2.12.1.
+6. Run GitHub Actions / Avirzo Release Gate, then deploy to staging and test generation on a saved project before production rollout.
+
+Workflow safeguard: Avirzo still builds individual scenes/shots. Batch music is optional and runs scene-by-scene; completed tracks are preserved if a later scene fails. This is not a one-button whole-film generator.
+
+11. Review generated shots at full size before assembly; regenerate clips with visual glitches, identity drift, inconsistent period clothing, or incorrect cultural details.
