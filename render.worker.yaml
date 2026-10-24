@@ -1,0 +1,70 @@
+# OPTIONAL paid background worker (plan: starter). NOT part of render.yaml on purpose,
+# so a Blueprint sync of the web service never creates a billable service.
+# To enable later: create a new Blueprint in Render pointing at this file (render.worker.yaml),
+# set the secrets, then set AVIRZO_WORKER_ENABLED to "true" on the web service.
+services:
+  - type: worker
+    name: avirzo-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node server/src/worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FREE_TRIAL_DAYS
+        value: "365"
+      - key: FREE_GENERATIONS_PER_YEAR
+        value: "2"
+      - key: FREE_CREDITS_PER_MONTH
+        value: "0"
+      - key: FREE_GENERATION_MODEL
+        value: gen4_turbo
+      - key: FREE_GENERATION_ENABLED
+        value: "true"
+      - key: FREE_REQUIRE_VERIFIED_EMAIL
+        value: "true"
+      - key: REQUIRE_VERIFIED_EMAIL
+        value: "true"
+      - key: PROVIDER_DAILY_BUDGET_USD
+        value: "25"
+      - key: FREE_TRIAL_POLICY_START
+        value: "2026-10-09"
+      # Set the same strong random value as the web service; do not generate a different secret here.
+      - key: ABUSE_HASH_SECRET
+        sync: false
+      - key: RUNWAYML_API_SECRET
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      - key: AZURE_SPEECH_KEY
+        sync: false
+      - key: AZURE_SPEECH_REGION
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: AVIRZO_FINANCE_ALERT_WEBHOOK_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: AVIRZO_PUBLIC_URL
+        sync: false
+      - key: WORKER_MAX_ATTEMPTS
+        value: "3"
+      - key: WORKER_POLL_MS
+        value: "5000"

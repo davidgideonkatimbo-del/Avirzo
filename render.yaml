@@ -1,0 +1,85 @@
+services:
+  - type: web
+    name: avirzo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FREE_TRIAL_DAYS
+        value: "365"
+      - key: FREE_GENERATIONS_PER_YEAR
+        value: "2"
+      - key: FREE_GENERATION_MODEL
+        value: gen4_turbo
+      - key: FREE_GENERATION_ENABLED
+        value: "true"
+      - key: FREE_REQUIRE_VERIFIED_EMAIL
+        value: "true"
+      - key: REQUIRE_VERIFIED_EMAIL
+        value: "true"
+      - key: FREE_TRIAL_POLICY_START
+        value: "2026-10-09"
+      - key: PROVIDER_DAILY_BUDGET_USD
+        value: "25"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "300"
+      - key: RATE_LIMIT_SENSITIVE_PER_10MIN
+        value: "40"
+      - key: FREE_CREDITS_PER_MONTH
+        value: "0"
+      - key: PORT
+        value: "10000"
+      - key: HOST
+        value: 0.0.0.0
+      # Production exports require the worker. Keep it disabled until avirzo-worker is deployed and healthy.
+      - key: AVIRZO_WORKER_ENABLED
+        value: "false" # explicit worker opt-in; value: 'false' is the disabled state
+      - key: AVIRZO_ALLOW_INLINE_EXPORTS_IN_PRODUCTION
+        value: "false" # fail closed: exports require the worker in production
+
+      - key: RUNWAYML_API_SECRET
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ABUSE_HASH_SECRET
+        sync: false
+      - key: AVIRZO_FINANCE_ALERT_WEBHOOK_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: AVIRZO_PUBLIC_URL
+        sync: false
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      - key: AZURE_SPEECH_KEY
+        sync: false
+      - key: AZURE_SPEECH_REGION
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_CREATOR_PRICE_ID
+        sync: false
+      - key: STRIPE_STUDIO_PRICE_ID
+        sync: false
